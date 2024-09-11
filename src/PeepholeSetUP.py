@@ -6,36 +6,22 @@
 
 # ### UTILS
 
-# In[1]:
-
 
 from utils_membership_prob import *
 
-
-# In[2]:
 
 
 import cmasher as cmr
 cmap = cmr.get_sub_cmap('brg', 0, 1)
 
 
-# In[3]:
-
-
 import warnings
 warnings.filterwarnings("ignore")
-
-
-# In[4]:
-
 
 get_ipython().run_line_magic('matplotlib', 'widget')
 
 
 # ## Select device
-
-# In[5]:
-
 
 use_cuda = torch.cuda.is_available()
 cuda_index = torch.cuda.device_count() - 2
@@ -44,9 +30,6 @@ print(f"Using {device} device")
 
 
 # ## Configuration
-
-# In[6]:
-
 
 dataset = 'CIFAR100'
 
@@ -64,9 +47,6 @@ dataset_name = dataset
 
 len_train = 40000
 len_val = 10000
-
-
-# In[7]:
 
 
 #dims_list = [10, 15, 20, 25, 30]
@@ -93,9 +73,6 @@ dir = 'in'
 layer_list =['feat-24', 'feat-26', 'feat-28', 'clas-0', 'clas-3']
 
 
-# In[8]:
-
-
 ATK = 'CW'
 
 
@@ -103,23 +80,15 @@ ATK = 'CW'
 
 # ### Load data
 
-# In[9]:
-
-
 batch_size = 64
 data_kwargs = {'num_workers': 4, 'pin_memory': True}
 
 
 # Get classes and `num_classes`
 
-# In[10]:
-
 
 classes = load_data(dataset, 'classes', batch_size=batch_size, data_kwargs={})
 num_classes = len(classes.keys())
-
-
-# In[11]:
 
 
 train_loader = load_data(dataset, 
@@ -129,17 +98,11 @@ train_loader = load_data(dataset,
                         )
 
 
-# In[13]:
-
-
 val_loader = load_data(dataset, 
                        'val', 
                        batch_size=batch_size, 
                        data_kwargs=data_kwargs
                       )
-
-
-# In[13]:
 
 
 test_loader = load_data(dataset, 
@@ -152,14 +115,10 @@ test_loader = load_data(dataset,
 # ### Load checkpoint
 # Load checkpoint from a pretrained and fine-tuned model
 
-# In[11]:
-
 
 model_name = f'vgg16_pretrained={pretrained}_dataset={dataset}-'\
              f'augmented_policy=CIFAR10_bs={bs}_seed={seed}.pth'
 
-
-# In[12]:
 
 
 abs_models_dir = os.path.join('/srv/newpenny/XAI/LM', 'models')
@@ -170,8 +129,6 @@ if os.path.exists(chkp_path):
     state_dict = chkp['state_dict']
 
 
-# In[13]:
-
 
 # see what is saved in the checkpoint (except for the state_dict)
 for k, v in chkp.items():
@@ -181,19 +138,12 @@ for k, v in chkp.items():
 
 # ### Load Activation
 
-# In[11]:
-
 
 dict_activations_train = load_activations(activations_path, portion='train', dataset=dataset_name)
 
 
-# In[12]:
-
 
 dict_activations_val = load_activations(activations_path, portion='val', dataset=dataset_name)
-
-
-# In[10]:
 
 
 name = f'dict_activations_attack={ATK}-dataset={dataset_name}.pkl'
@@ -201,8 +151,6 @@ dict_activations_attack = load_res_c(name)
 
 
 # ### Load SVD
-
-# In[13]:
 
 
 ## configuration
@@ -231,15 +179,11 @@ dict_file = f'dict_SVD_model={model_name}_layer={layers}_'\
 dict_file
 
 
-# In[14]:
-
 
 path = os.path.join('data', 'SVD', dict_file)
 with open(path, mode='rb') as fp:
     dict_SVD = pickle.load(fp)
 
-
-# In[15]:
 
 
 dict_SVD.keys()
@@ -247,15 +191,11 @@ dict_SVD.keys()
 
 # ### Load model
 
-# In[14]:
-
 
 model = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
 
 
 # Modify output shape depending on `num_classes`
-
-# In[15]:
 
 
 in_features = 4096
@@ -264,13 +204,9 @@ out_features = num_classes
 model.classifier[-1] = nn.Linear(in_features, out_features)
 
 
-# In[16]:
-
 
 model.load_state_dict(state_dict)
 
-
-# In[17]:
 
 
 model = model.to(device)
@@ -279,15 +215,11 @@ model.eval()
 
 # ### Load attack dataset
 
-# In[18]:
-
 
 path_ = os.path.join('data', 'attack')
 with open(os.path.join(path_, f'adv_dict_train_method={ATK}.pkl'), 'rb') as fp:
     adv_dict = pickle.load(fp)
 
-
-# In[19]:
 
 
 dataset_ = DictDataset(adv_dict)
@@ -297,13 +229,9 @@ attack_loader = torch.utils.data.DataLoader(dataset_,
                                             shuffle=False)
 
 
-# In[30]:
-
 
 dict_activations_train = load_activations(activations_path, portion='train', dataset=dataset_name)
 
-
-# In[33]:
 
 
 dict_activations_val = load_activations(activations_path, portion='val', dataset=dataset_name)
@@ -312,8 +240,6 @@ dict_activations_val = load_activations(activations_path, portion='val', dataset
 # ### Load Cycles with EP
 
 # #### Train & Val
-
-# In[ ]:
 
 
 dict_peephole_train_ = []
@@ -342,8 +268,6 @@ for dim in dims_list:
     clustering_labels_val_.append(load_res_lc(name))
 
 
-# In[ ]:
-
 
 dict_peephole_train = {k: v for d in dict_peephole_train_ for k, v in d.items()}
 dict_peephole_val = {k: v for d in dict_peephole_val_ for k, v in d.items()}
@@ -355,8 +279,6 @@ clustering_labels_val = {k: v for d in clustering_labels_val_ for k, v in d.item
 
 
 # #### Attack
-
-# In[11]:
 
 
 dict_peephole_attack_ = []
@@ -377,8 +299,6 @@ for dim in dims_list:
     clustering_labels_attack_.append(load_res(name))
 
 
-# In[12]:
-
 
 dict_peephole_attack = {k: v for d in dict_peephole_attack_ for k, v in d.items()}
 distances_prob_attack = {k: v for d in distances_prob_attack_ for k, v in d.items()} 
@@ -386,8 +306,6 @@ clustering_labels_attack = {k: v for d in clustering_labels_attack_ for k, v in 
 
 
 # ### Load Cycles WITHOUT EP
-
-# In[9]:
 
 
 dist_attack_ = []
@@ -403,14 +321,10 @@ for dim in dims_list:
     dist_val_.append(load_res_lm(name))
 
 
-# In[10]:
-
 
 dist_attack = {k: v for d in dist_attack_ for k, v in d.items()} 
 dist_val = {k: v for d in dist_val_ for k, v in d.items()}
 
-
-# In[11]:
 
 
 dict_dist_val = {}
@@ -436,8 +350,6 @@ for dim in dims_list:
 # ## STORE
 
 # ### Store SVD
-
-# In[7]:
 
 
 ## configuration
@@ -468,18 +380,12 @@ dict_file = f'dict_SVD_model={model_name}_layer={layers}_'\
 
 dict_file
 
-
-# In[8]:
-
-
 path = os.path.join('data', 'SVD', dict_file)
 with open(path, 'wb') as fp:
     pickle.dump(dict_SVD, fp)
 
 
 # ### Store peephole
-
-# In[208]:
 
 
 ## configuration
@@ -516,18 +422,12 @@ dict_file = f'dict_peephole_dim={dim}_portion={portion}_model={model_name}_layer
 
 dict_file
 
-
-# In[209]:
-
-
 path = os.path.join('data', 'peephole', dict_file)
 with open(path, 'wb') as fp:
     pickle.dump(dict_peephole_val_50, fp)
 
 
 # ### Store Empirical posterior
-
-# In[204]:
 
 
 ## configuration
@@ -549,10 +449,6 @@ EP_filename = f'empirical_posterior_model={model_name}_layer={layers}_'\
 
 EP_filename
 
-
-# In[205]:
-
-
 path = os.path.join('data', 'empirical_posterior', EP_filename)
 with open(path, 'wb') as fp:
     pickle.dump(empirical_posterior_50, fp)
@@ -562,14 +458,8 @@ with open(path, 'wb') as fp:
 
 # ### SVD
 
-# In[ ]:
-
 
 dict_SVD = {}
-
-
-# In[24]:
-
 
 layer_type = 'classifier'
 
@@ -577,22 +467,12 @@ layer_index = '3'
 
 layer_name = layer_type[0:4] + '-' + layer_index
 
-
-# In[25]:
-
-
 U, s, Vh = get_svd(params=state_dict, layer_type=layer_type, layer_index=layer_index, input_shape=None, k=None)
-
-
-# In[29]:
-
 
 dict_SVD[layer_name] = [U, s, Vh]
 
 
 # #### Working with Conv
-
-# In[46]:
 
 
 name_ = f'unrolled_params_layer=features-28_dataset=CIFAR100.npz'
@@ -601,15 +481,7 @@ abs_path = '/srv/newpenny/XAI/LM'
 path_ = os.path.join(abs_path, 'data', 'peepholes', name_)
 path_
 
-
-# In[47]:
-
-
 W_csr_ = scipy.sparse.load_npz(path_)
-
-
-# In[48]:
-
 
 U, s, Vh = get_svd_sparse(W_csr_, k=100)
 
@@ -617,9 +489,6 @@ U, s, Vh = get_svd_sparse(W_csr_, k=100)
 # ### Activations
 
 # #### Train
-
-# In[24]:
-
 
 dict_activations_train = get_activation_VGG(model, 
                                             loader=train_loader, 
@@ -629,8 +498,6 @@ dict_activations_train = get_activation_VGG(model,
 
 
 # #### Val
-
-# In[24]:
 
 
 dict_activations_val = get_activation_VGG(model, 
@@ -642,17 +509,12 @@ dict_activations_val = get_activation_VGG(model,
 
 # #### Attack
 
-# In[20]:
-
-
 dict_activations_attack = get_activation_VGG(model, 
                                              loader=attack_loader, 
                                              layers_dict=layers_dict, 
                                              dir=dir, 
                                              device=device)
 
-
-# In[21]:
 
 
 ## configuration
@@ -673,10 +535,6 @@ activations_attack = f'dict_activations_portion=train_attack_{ATK}_model={model_
                        f'dir={dir}_ft={fine_tuned}_seed={seed}_dataset={dataset_name}_.pkl'      
 activations_attack
 
-
-# In[22]:
-
-
 path_ = os.path.join('data', 'dict_activations', activations_attack)
 with open(os.path.join(path_), 'wb') as fp:
     pickle.dump(dict_activations_attack,fp)
@@ -685,8 +543,6 @@ with open(os.path.join(path_), 'wb') as fp:
 # ### Computation Cycle with EP
 
 # #### Train & Val
-
-# In[16]:
 
 
 dict_peephole_train = {} 
@@ -787,8 +643,6 @@ for dim in tqdm(dims_list):
 
 # #### Attack
 
-# In[120]:
-
 
 dict_peephole_attack = {}
 distances_prob_attack = {} 
@@ -838,8 +692,6 @@ for dim in dims_list:
 
 
 # ### Computation cycle WITHOUT EP
-
-# In[40]:
 
 
 dict_peephole_attack = {}
@@ -899,8 +751,6 @@ for dim in tqdm(dims_list):
 
 # ## Analysis of the attacks
 
-# In[13]:
-
 
 # Define the CIFAR-100 classes
 cifar100_classes = [
@@ -929,8 +779,6 @@ print(class_dict)
 
 # ## DEPLETION
 
-# In[28]:
-
 
 results = np.concatenate(dict_activations_val['results'])
 tot_true = np.sum(results==True)
@@ -939,8 +787,6 @@ tot_true, tot_false
 
 
 # ### Empirical Posterior = True
-
-# In[31]:
 
 
 def predict_proba_v(weights=None, empirical_posterior=None, clustering_labels=None, n_classes=None):
@@ -967,43 +813,7 @@ def predict_proba_v(weights=None, empirical_posterior=None, clustering_labels=No
     return np.array(pred)
 
 
-# In[32]:
-
-
-def predict_proba_t(weights=None, empirical_posterior=None, clustering_labels=None, n_classes=None):
-    """Returns surrogate model's predicted probabilities.
-
-    Args:
-      features: a batch of input data that the baseline model can process.
-      activations_dict: Python dict of cached activations created by calling
-        self.get_activations.
-      weights: a list of weights (need not be normalized), one for each
-        activation.
-    """
-    # Equal weights are used if not provided by the user.
-    if weights is None:
-        weights = [1.0] * len(activation_names)
-
-    pred = []
-    for one_hot_encoding in clustering_labels:
-        # print(one_hot_encoding)
-        # print(len(one_hot_encoding))
-        pred.append(p(example_score=one_hot_encoding, 
-                      empirical_posterior=empirical_posterior, 
-                      weights=weights, n_classes=n_classes))
-    return np.array(pred)
-
-
-# #### Based on Max
-
-# In[22]:
-
-
 measure = 'max'
-
-
-# In[36]:
-
 
 weights_24 = [1, 0, 0, 0, 0]
 weights_26 = [0, 1, 0, 0, 0]
@@ -1026,15 +836,7 @@ w_dict = {
           # 'features' : weights_unbalanced_3, 
           }
 
-
-# In[24]:
-
-
 dims_list, num_clusters
-
-
-# In[25]:
-
 
 len_dict = len(w_dict.keys())
 len_dim = len(dims_list)
@@ -1042,8 +844,6 @@ array = np.arange(0,100,0.1)
 
 
 # ##### Fine
-
-# In[35]:
 
 
 fig, axs = plt.subplots(len_dict,len_dim,figsize=(20,16))
@@ -1103,18 +903,10 @@ for j, (key, weight) in enumerate(w_dict.items()):
 fig.tight_layout()
 fig.subplots_adjust(top=0.9)
 
-
-# In[26]:
-
-
 def save_res(name, file):
     path = os.path.join(abs_lm,'results', 'paper', name)
     with open(path, 'wb') as fp:
         pickle.dump(file, fp)
-
-
-# In[38]:
-
 
 for key, weight in w_dict.items():
 
@@ -1187,8 +979,6 @@ fig.subplots_adjust(top=0.9)
 
 # #### Attack visualization
 
-# In[32]:
-
 
 data_iterator = iter(val_loader)
 attack_iterator = iter(attack_loader)
@@ -1239,10 +1029,6 @@ print(label[k])
 print(final_prob_attack[k])
 print(torch.max(prob_attack[k]))
 print(target[k])
-
-
-# In[25]:
-
 
 model.eval()
 sm = nn.Softmax()
@@ -1296,17 +1082,9 @@ for data in tqdm(attack_loader):
 print(f'Attack success rate {(number_corrects / number_samples)*100}%')
 attack_success = (number_corrects / number_samples)*100
 
-
-# In[26]:
-
-
 H_val = np.concatenate(entropy_val)
 
 H_attack = np.concatenate(entropy_attack)
-
-
-# In[27]:
-
 
 fig, axs = plt.subplots(1,figsize=(10,8))
 axs.hist(H_val, bins=50, density=True, alpha=0.5, label='val')
@@ -1315,10 +1093,6 @@ axs.set_title('Entropy')
 axs.legend()
 
 plt.show()
-
-
-# In[28]:
-
 
 original_labels = np.zeros(len(H_val))
 attack_labels = np.ones(len(H_attack))
@@ -1339,8 +1113,6 @@ auc_NN
 # ##### Monitoring layers separately
 
 # ###### no likelihood
-
-# In[98]:
 
 
 for layer in layer_list:
@@ -1378,17 +1150,10 @@ for layer in layer_list:
         df = df.join(df_)
                         
 
-
-# In[99]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 
 
 # ###### with likelihood
-
-# In[100]:
-
 
 for layer in layer_list:
     
@@ -1429,24 +1194,13 @@ for layer in layer_list:
         df = df.join(df_)
                         
 
-
-# In[101]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 
 
 # ##### Monitoring the Joint PDF
 
-# In[102]:
-
-
 dict_matrix_attack = {}
 dict_matrix_val = {}
-
-
-# In[103]:
-
 
 for n in num_clusters:
 
@@ -1469,10 +1223,6 @@ for n in num_clusters:
         dict_matrix_attack[(dim,n)] = matrix_attack
         dict_matrix_val[(dim,n)] = matrix_val
                         
-
-
-# In[104]:
-
 
 list_layers = ['clas3', 'clas0-3', 'feat28+clas0-3', 'feat26-28+clas0-3', 'feat24-26-28+clas0-3']
 
@@ -1509,10 +1259,6 @@ for i in range(1,6):
         df_.sort_index(inplace=True)
         df = df.join(df_)              
 
-
-# In[105]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 
 
@@ -1521,8 +1267,6 @@ df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 # ##### Monitoring layers separately
 
 # ###### without likelihood
-
-# In[106]:
 
 
 for layer in layer_list:
@@ -1566,16 +1310,10 @@ for layer in layer_list:
         df = df.join(df_)
                         
 
-
-# In[107]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 
 
 # ###### with likelihood
-
-# In[108]:
 
 
 for layer in layer_list:
@@ -1623,24 +1361,13 @@ for layer in layer_list:
         df = df.join(df_)
                         
 
-
-# In[109]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 
 
 # ##### Monitoring the Joint PDF
 
-# In[110]:
-
-
 dict_matrix_attack = {}
 dict_matrix_val = {}
-
-
-# In[111]:
-
 
 for n in num_clusters:
 
@@ -1670,10 +1397,6 @@ for n in num_clusters:
         dict_matrix_val[(dim,n)] = matrix_val
                         
 
-
-# In[112]:
-
-
 list_layers = ['clas3', 'clas0-3', 'feat28+clas0-3', 'feat26-28+clas0-3', 'feat24-26-28+clas0-3']
 
 for i in range(1,6):
@@ -1709,10 +1432,6 @@ for i in range(1,6):
         df_.sort_index(inplace=True)
         df = df.join(df_)              
 
-
-# In[113]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 
 
@@ -1721,9 +1440,6 @@ df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 # ##### Monitoring layers separately
 
 # ###### without likelihood
-
-# In[12]:
-
 
 dict_min = {}
 dict_attack = {}
@@ -1766,15 +1482,7 @@ for layer in layer_list:
     #     df = df.join(df_)
                         
 
-
-# In[115]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
-
-
-# In[16]:
-
 
 for n in num_clusters:
     for dim in dims_list:
@@ -1787,15 +1495,9 @@ for n in num_clusters:
         plt.show()
 
 
-# In[ ]:
-
-
-
 
 
 # ###### with likelihood
-
-# In[116]:
 
 
 for layer in layer_list:
@@ -1838,24 +1540,14 @@ for layer in layer_list:
         df = df.join(df_)
                         
 
-
-# In[117]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 
 
 # ##### Monitoring the Joint PDF
 
-# In[118]:
-
 
 dict_matrix_attack = {}
 dict_matrix_val = {}
-
-
-# In[119]:
-
 
 for n in num_clusters:
 
@@ -1879,15 +1571,7 @@ for n in num_clusters:
         dict_matrix_val[(dim,n)] = matrix_val
                         
 
-
-# In[120]:
-
-
 len(lh_attack[np.isfinite(lh_attack)])
-
-
-# In[121]:
-
 
 list_layers = ['clas3', 'clas0-3', 'feat28+clas0-3', 'feat26-28+clas0-3', 'feat24-26-28+clas0-3']
 
@@ -1926,8 +1610,6 @@ for i in range(1,6):
         df = df.join(df_)              
 
 
-# In[122]:
-
 
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 
@@ -1935,8 +1617,6 @@ df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 # #### MAX with SOFTMIN
 
 # ##### Monitoring layers separately
-
-# In[123]:
 
 
 for layer in layer_list:
@@ -1981,23 +1661,14 @@ for layer in layer_list:
                         
 
 
-# In[124]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 
 
 # ##### Monitoring the Joint PDF
 
-# In[125]:
-
 
 dict_matrix_attack = {}
 dict_matrix_val = {}
-
-
-# In[126]:
-
 
 for n in num_clusters:
 
@@ -2026,10 +1697,6 @@ for n in num_clusters:
         dict_matrix_attack[(dim,n)] = matrix_attack
         dict_matrix_val[(dim,n)] = matrix_val
                         
-
-
-# In[127]:
-
 
 list_layers = ['clas3', 'clas0-3', 'feat28+clas0-3', 'feat26-28+clas0-3', 'feat24-26-28+clas0-3']
 
@@ -2067,15 +1734,11 @@ for i in range(1,6):
         df = df.join(df_)              
 
 
-# In[128]:
-
 
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 
 
 # #### Entropy
-
-# In[237]:
 
 
 #KDE_silver = {}
@@ -2147,13 +1810,8 @@ for key, weights in w_dict.items():
         df = df.join(df_)
 
 
-# In[238]:
-
 
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
-
-
-# In[71]:
 
 
 dim = 15
@@ -2200,25 +1858,14 @@ y_score = np.concatenate([lh_val, lh_attack])
 auc_ = AUC(y_true=y_true, y_score=y_score)
 
 
-# In[72]:
-
 
 auc_
-
-
-# In[50]:
 
 
 lh_val
 
 
-# In[51]:
-
-
 lh_attack
-
-
-# In[52]:
 
 
 x_test = np.linspace(3.20,4.65,100)
@@ -2227,20 +1874,9 @@ plt.figure()
 plt.plot(x_test,y_test)
 
 
-# In[386]:
-
-
 lh_val
 
-
-# In[387]:
-
-
 lh_attack
-
-
-# In[362]:
-
 
 fig, axs = plt.subplots(2,2,figsize=(10,8),sharey='col')
 axs[0,0].hist(lh_val, bins=10, alpha=0.5, label='val')
@@ -2254,10 +1890,6 @@ for ax in axs.ravel():
 # axs.legend()
 
 plt.show()
-
-
-# In[267]:
-
 
 weights_eq = [1/3, 1/3, 1/3]
 # weights_24 = [1, 0, 0, 0, 0]
@@ -2278,10 +1910,6 @@ w_dict = {#'equal' : weights_eq,
           'clas-0-3' : weights_0_3, 
           'feat-28-clas-0' : weights_28_0
          }
-
-
-# In[268]:
-
 
 #KDE_silver = {}
 KDE_scott = {}
@@ -2365,27 +1993,11 @@ for key, weights in w_dict.items():
         df_1.sort_index(inplace=True)
         df1 = df1.join(df_1)
 
-
-# In[255]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
-
-
-# In[256]:
-
 
 df1.style.background_gradient(subset=df1.columns, cmap=cmap, vmin=0.5, vmax=1)
 
-
-# In[259]:
-
-
 from IPython.display import display, HTML
-
-
-# In[284]:
-
 
 def display_side_by_side(*args):
     html_str=''
@@ -2393,16 +2005,8 @@ def display_side_by_side(*args):
         html_str+=df.to_html()
     display_html(html_str.replace('table','table style="display:inline"'),raw=True)
 
-
-# In[270]:
-
-
 # Assuming that dataframes df1 and df2 are already defined
 display_side_by_side(df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1), df1.style.background_gradient(subset=df1.columns, cmap=cmap, vmin=0.5, vmax=1))
-
-
-# In[402]:
-
 
 #KDE_silver = {}
 KDE_scott = {}
@@ -2490,18 +2094,11 @@ for key, weights in w_dict.items():
         df_1.sort_index(inplace=True)
         df1 = df1.join(df_1)
 
-
-# In[403]:
-
-
 # Assuming that dataframes df1 and df2 are already defined
 display_side_by_side(df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1), df1.style.background_gradient(subset=df1.columns, cmap=cmap, vmin=0.5, vmax=1))
 
 
 # #### MAX
-
-# In[240]:
-
 
 #KDE_silver = {}
 KDE_scott = {}
@@ -2570,21 +2167,9 @@ for key, weights in w_dict.items():
         df_.sort_index(inplace=True)
         df = df.join(df_)
 
-
-# In[ ]:
-
-
 y_score, max_val, max_attack
 
-
-# In[241]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
-
-
-# In[289]:
-
 
 #KDE_silver = {}
 KDE_scott = {}
@@ -2670,16 +2255,8 @@ for key, weights in w_dict.items():
         df_1.sort_index(inplace=True)
         df1 = df1.join(df_1)
 
-
-# In[291]:
-
-
 # Assuming that dataframes df1 and df2 are already defined
 display_side_by_side(df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1), df1.style.background_gradient(subset=df1.columns, cmap=cmap, vmin=0.5, vmax=1))
-
-
-# In[373]:
-
 
 dim = 10
 n = 120
@@ -2722,10 +2299,6 @@ y_score = np.concatenate([lh_val, lh_attack])
 
 auc_ = AUC(y_true=y_true, y_score=y_score)
 
-
-# In[380]:
-
-
 fig, axs = plt.subplots(2,figsize=(10,8),sharey='col')
 axs[0].hist(lh_val, bins=100, alpha=0.5, label='val')
 axs[0].hist(lh_attack, bins=100, alpha=0.5, label='attack')
@@ -2741,80 +2314,33 @@ for ax in axs.ravel():
 
 plt.show()
 
-
-# In[290]:
-
-
 df1.style.background_gradient(subset=df1.columns, cmap=cmap, vmin=0.5, vmax=1)
-
-
-# In[285]:
-
 
 # Assuming that dataframes df1 and df2 are already defined
 display_side_by_side(df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1), df1.style.background_gradient(subset=df1.columns, cmap=cmap, vmin=0.5, vmax=1))
 
-
-# In[164]:
-
-
 np.min(entropy_val), np.max(entropy_val)
-
-
-# In[158]:
-
 
 KDE_scott[(dim,n)].factor
 
-
-# In[161]:
-
-
 KDE_scott[(dim,n)].evaluate(entropy_val), KDE_scott[(dim,n)].evaluate(entropy_attack)
-
-
-# In[165]:
-
 
 KDE_scott[(dim,n)].pdf( np.min(entropy_val)), KDE_scott[(dim,n)].pdf(np.max(entropy_val))
 
-
-# In[166]:
-
-
 np.min(KDE_scott[(dim,n)].pdf(entropy_val)), np.max(KDE_scott[(dim,n)].pdf(entropy_val))
-
-
-# In[167]:
-
 
 kde_ = KDE_scott[(dim,n)]
 
-
-# In[157]:
-
-
 entropy_val[0], entropy_attack[0]
-
-
-# In[173]:
-
 
 likelihood = -np.log(kde_.pdf(entropy_val[0]))
 likelihood
-
-
-# In[174]:
-
 
 likelihood = -np.log(kde_.pdf(entropy_attack[0]))
 likelihood
 
 
 # Now we need clustering labels to compute predict_proba based on weights
-
-# In[114]:
-
 
 #weights_eq = [1/3, 1/3, 1/3]
 # weights_24 = [1, 0, 0, 0, 0]
@@ -2834,10 +2360,6 @@ w_dict = {#'equal' : weights_eq,
           'clas-0-3' : weights_0_3, 
          }
 
-
-# In[169]:
-
-
 weights_28 = [1, 0, 0,]
 weights_0 = [0, 1, 0,]
 weights_3 = [0, 0, 1,]
@@ -2854,16 +2376,8 @@ w_dict = {'equal' : weights_eq,
           'clas-0-3' : weights_0_3, 
          }
 
-
-# In[93]:
-
-
 num_clusters = [50, 100, 120, 150]
 dims_list = [50, 60, 70]
-
-
-# In[73]:
-
 
 dim = 30
 n =150
@@ -2896,10 +2410,6 @@ axs.set_title('entropy')
 axs.legend()
 
 entropy_val.shape
-
-
-# In[45]:
-
 
 for key, weights in w_dict.items():
     
@@ -2964,15 +2474,7 @@ for key, weights in w_dict.items():
         df_.sort_index(inplace=True)
         df = df.join(df_)
 
-
-# In[46]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
-
-
-# In[121]:
-
 
 dim = 10
 n = 15
@@ -2995,27 +2497,11 @@ pa = predict_proba(weights=weights,
 H_val = H(pv,axis=1)
 H_attack = H(pa,axis=1)
 
-
-# In[87]:
-
-
 H_val.mean(), H_attack.mean()
-
-
-# In[88]:
-
 
 H_val.std(), H_attack.std()
 
-
-# In[70]:
-
-
 H_attack.shape
-
-
-# In[89]:
-
 
 fig, axs = plt.subplots(1,figsize=(10,8))
 axs.hist(H_val, bins=50, density=True, alpha=0.5, label='val')
@@ -3024,10 +2510,6 @@ axs.set_title('Entropy')
 axs.legend()
 
 plt.show()
-
-
-# In[59]:
-
 
 for key, weights in w_dict.items():
     
@@ -3085,21 +2567,9 @@ for key, weights in w_dict.items():
         df_.sort_index(inplace=True)
         df = df.join(df_)
 
-
-# In[60]:
-
-
 df.style.background_gradient(subset=df.columns, cmap=cmap, vmin=0.5, vmax=1)
 
-
-# In[51]:
-
-
 dims_list, num_clusters, dict_SVD.keys()
-
-
-# In[120]:
-
 
 # dict_peephole_train = {} 
 # dict_peephole_val = {} 
@@ -3222,10 +2692,6 @@ for dim in dims_list:
     name = f'_clustering_labels_attack-dim={dim}-method={method}-dataset=CIFAR100.pkl'
     save_res(name, clustering_labels_attack)
 
-
-# In[39]:
-
-
 dict_peephole_attack_ = []
 
 distances_prob_attack_ = []
@@ -3243,23 +2709,11 @@ for dim in dims_list:
     name = f'clustering_labels_attack-dim={dim}-method={method}-dataset=CIFAR100.pkl'
     clustering_labels_attack_.append(load_res(name))
 
-
-# In[40]:
-
-
 dict_peephole_attack = {k: v for d in dict_peephole_attack_ for k, v in d.items()}
 distances_prob_attack = {k: v for d in distances_prob_attack_ for k, v in d.items()} 
 clustering_labels_attack = {k: v for d in clustering_labels_attack_ for k, v in d.items()}
 
-
-# In[44]:
-
-
 dict_peephole_attack[(10,10)]['peephole'].keys()
-
-
-# In[61]:
-
 
 for key, weights in w_dict.items():
     
@@ -3359,14 +2813,7 @@ for key, weights in w_dict.items():
         df_area_val = df_area_val.join(df0_)
 
 
-# In[63]:
-
-
 df_area_attack.style.background_gradient(subset=df.columns, cmap=cmap, vmin=300, vmax=1000)
-
-
-# In[ ]:
-
 
 
 
