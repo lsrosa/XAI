@@ -7,7 +7,7 @@ if __name__ == "__main__":
     device = torch.device(f"cuda:{cuda_index}" if use_cuda else "cpu")
     print(f"Using {device} device")
     
-    cifar = Cifar()
+    cifar = Cifar(dataset='CIFAR100')
     cifar.load_data(
             batch_size = 64,
             data_kwargs = {'num_workers': 4, 'pin_memory': True},

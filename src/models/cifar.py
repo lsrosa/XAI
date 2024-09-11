@@ -33,7 +33,7 @@ class Cifar(ModelBase):
                         'means': (0.424, 0.415, 0.384),
                         'stds': (0.283, 0.278, 0.284)
                         }
-            elif self.dataset == '':
+            elif self.dataset == 'CIFAR100':
                 self.config = {
                         'num_classes': 100,       
                         'input_ch': 3, 
