@@ -107,13 +107,18 @@ class Cifar(ModelBase):
         dl = DataLoader(val_dataset)
         it = iter(dl)
         img, label = next(it)
-        
         plt.figure()
         plt.imshow(np.transpose(make_grid(img), (1, 2, 0)))
         plt.savefig('aaa')
-        input()
-        val_dataset.dataset.transform = original_transform
         
+        val_dataset.dataset.transform = transforms.Compose([transforms.RandomHorizontalFlip(p=1.0), transforms.ToTensor()]) #original_transform
+        
+        dl = DataLoader(val_dataset)
+        it = iter(dl)
+        img, label = next(it)
+        plt.figure()
+        plt.imshow(np.transpose(make_grid(img), (1, 2, 0)))
+        plt.savefig('bbbb')
         
         # Apply the transformation accoding to data augmentation 
         if data_augmentation:
