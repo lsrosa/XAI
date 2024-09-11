@@ -3,8 +3,6 @@ from models.model_base import ModelBase
 
 # General python stuff
 from pathlib import Path as Path
-from matplotlib import pyplot as plt
-import numpy as np
 
 # torch stuff
 import torch
@@ -13,7 +11,6 @@ from torch.utils.data import random_split, DataLoader
 # CIFAR from torchvision
 from torchvision import transforms, datasets
 from torchvision.transforms import AutoAugment, AutoAugmentPolicy
-from torchvision.utils import make_grid
 
 class Cifar(ModelBase):
     def __init__(self, **kwargs):
@@ -52,6 +49,34 @@ class Cifar(ModelBase):
         return
     
     def load_data(self, **kwargs):
+        '''
+        Load and prepare data for a specified portion of a dataset.
+        
+        Args:
+        - dataset (str): The name of the dataset ('CIFAR10', 'CIFAR100' or 'imagenet-1k').
+        - batch_size (int): The batch size for DataLoader.
+        - data_kwargs (dict): Additional keyword arguments for DataLoader.
+        - seed (int): Random seed for reproducibility (default: 42).
+        - data_augmentation (bool): Flag indicating whether to apply data 
+        augmentation (default: False).
+        
+        Returns:
+        - dict: containing a DataLoader for 'train', 'val', 'test', and a dictionary mapping class indices to class names for 'classes'.
+        
+        Example:
+        - To load the training data of CIFAR10 with a batch size of 32:
+        >>> c = Cifar(dataset = 'CIFAR10')
+        >>> loaders = c.load_data(batch_size=32, data_kwargs={}, seed=42)
+
+        To get a dictionary mapping class indices to names:
+        >>> class_dict = loaders['classes']
+        
+        To get the train, validation, and data:
+        >>> train_data = loaders['train']
+        >>> train_data = loaders['val']
+        >>> train_data = loaders['test']
+        '''
+
         # parse parameteres
         batch_size = kwargs['batch_size']
         data_kwargs = kwargs['data_kwargs']
@@ -94,7 +119,7 @@ class Cifar(ModelBase):
         _train_data = datasets.__dict__[self.dataset]( 
             root=data_path,
             train=True,
-            transform=transforms.Compose([transforms.ToTensor()]), #None, #original_transform,
+            transform=None, #original_transform,
             download=True
         )
         
@@ -103,22 +128,9 @@ class Cifar(ModelBase):
             [0.8, 0.2],
             generator=torch.Generator().manual_seed(seed)
         )
-         
-        dl = DataLoader(val_dataset)
-        it = iter(dl)
-        img, label = next(it)
-        plt.figure()
-        plt.imshow(np.transpose(make_grid(img), (1, 2, 0)))
-        plt.savefig('aaa')
         
-        val_dataset.dataset.transform = transforms.Compose([transforms.RandomHorizontalFlip(p=1.0), transforms.ToTensor()]) #original_transform
-        
-        dl = DataLoader(val_dataset)
-        it = iter(dl)
-        img, label = next(it)
-        plt.figure()
-        plt.imshow(np.transpose(make_grid(img), (1, 2, 0)))
-        plt.savefig('bbbb')
+        # set validation dataset transform
+        val_dataset.dataset.transform = original_transform
         
         # Apply the transformation accoding to data augmentation 
         if data_augmentation:
@@ -146,8 +158,7 @@ class Cifar(ModelBase):
             'classes': self.classes
             }
 
-        return
-
+        return self.loaders
 
     def get_train_dataset(self):
         return self.train_ds
