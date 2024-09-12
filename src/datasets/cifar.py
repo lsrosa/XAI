@@ -1,5 +1,5 @@
 # Our stuff
-from models.model_base import ModelBase
+from datasets.dataset_base import DatasetBase
 
 # General python stuff
 from pathlib import Path as Path
@@ -12,9 +12,9 @@ from torch.utils.data import random_split, DataLoader
 from torchvision import transforms, datasets
 from torchvision.transforms import AutoAugment, AutoAugmentPolicy
 
-class Cifar(ModelBase):
+class Cifar(DatasetBase):
     def __init__(self, **kwargs):
-        ModelBase.__init__(self)
+        DatasetBase.__init__(self, **kwargs)
         
         # use CIFAR10 by default
         if 'dataset' in kwargs:
@@ -40,12 +40,6 @@ class Cifar(ModelBase):
                         'means': (0.438, 0.418, 0.377), 
                         'stds': (0.300, 0.287, 0.294)
                         }
-
-        self.train_ds = None
-        self.val_ds = None
-        self.test_ds = None
-        self.classes = None
-        self.loaders = None
         return
     
     def load_data(self, **kwargs):
@@ -82,20 +76,11 @@ class Cifar(ModelBase):
         data_kwargs = kwargs['data_kwargs']
         seed = kwargs['seed']
 
-        if 'data_augmentation' in kwargs:
-            data_augmentation = kwargs['data_augmentation']
-        else:
-            data_augmentation=False
+        data_augmentation = kwargs['data_augmentation'] if 'data_augmentation' in kwargs else False
         
-        if 'shuffle_train' in kwargs:
-            shuffle_train = kwargs['suffle_train']
-        else:
-            shuffle_train = True
+        shuffle_train = kwargs['suffle_train'] if 'shuffle_train' in kwargs else True
         
-        if 'data_path' in kwargs:
-            data_path =  kwargs['datapath']
-        else:
-            data_path = Path.cwd().parent/'data'
+        data_path =  kwargs['datapath'] if 'data_path' in kwargs else Path.cwd().parent/'data'
 
         # set torch seed
         torch.manual_seed(seed)
@@ -145,30 +130,17 @@ class Cifar(ModelBase):
             train_dataset.dataset.transform = original_transform
      
         # Save datasets as objects in the class
-        self.train_ds = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle_train, **data_kwargs)
-        self.val_ds = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, **data_kwargs)
-        self.test_ds = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, **data_kwargs)
+        self._train_ds = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle_train, **data_kwargs)
+        self._val_ds = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, **data_kwargs)
+        self._test_ds = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, **data_kwargs)
 
-        self.classes = {i: class_name for i, class_name in enumerate(test_dataset.classes)}  
+        self._classes = {i: class_name for i, class_name in enumerate(test_dataset.classes)}  
         
-        self.loaders = {
-            'train': self.train_ds,
-            'val': self.val_ds,
-            'test': self.test_ds,
-            'classes': self.classes
+        self._loaders = {
+            'train': self._train_ds,
+            'val': self._val_ds,
+            'test': self._test_ds,
+            'classes': self._classes
             }
 
-        return self.loaders
-
-    def get_train_dataset(self):
-        return self.train_ds
-    
-    def get_val_dataset(self):
-        return self.val_ds
-
-    def get_test_dataset(self):
-        return self.test_ds
-
-    def get_parameter_matrix(self):
-        print('ccc')
-
+        return self._loaders
