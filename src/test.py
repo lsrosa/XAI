@@ -40,8 +40,8 @@ if __name__ == "__main__":
 
     layers_dict = {'classifier': [0,3],
                   'features': [28]}
-    direction = 'in'
-    model.add_hooks(layers_dict=layers_dict, direction=direction, verbose=True) 
+    direction = {'save_input':False, 'save_output':True}
+    model.add_hooks(layers_dict=layers_dict, **direction, verbose=False) 
     
     i = 0
     for d in ds.get_test_dataset():

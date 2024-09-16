@@ -80,8 +80,6 @@ class Cifar(DatasetBase):
         
         shuffle_train = kwargs['suffle_train'] if 'shuffle_train' in kwargs else True
         
-        data_path =  kwargs['datapath'] if 'data_path' in kwargs else Path.cwd().parent/'data'
-
         # set torch seed
         torch.manual_seed(seed)
 
@@ -94,7 +92,7 @@ class Cifar(DatasetBase):
         
         # Test dataset is loaded directly
         test_dataset = datasets.__dict__[self.dataset](
-            root=data_path,
+            root=self.data_path,
             train=False,
             transform=original_transform,
             download=True
@@ -102,7 +100,7 @@ class Cifar(DatasetBase):
         
         # train data will be splitted for training and validation
         _train_data = datasets.__dict__[self.dataset]( 
-            root=data_path,
+            root=self.data_path,
             train=True,
             transform=None, #original_transform,
             download=True

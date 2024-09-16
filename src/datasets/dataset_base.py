@@ -7,10 +7,8 @@ from torch.utils.data import random_split, DataLoader
 
 class DatasetBase(metaclass=abc.ABCMeta):
     def __init__(self, **kwargs):
-        # computed in load_checkpoint()
-        self._checkpoint = None
-        self._state_dict = None
-        
+        self.data_path = kwargs['datapath'] if 'data_path' in kwargs else Path.cwd().parent/'data/datasets'
+
         # computed in load_data()
         self._train_ds = None
         self._val_ds = None

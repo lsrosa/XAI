@@ -7,14 +7,17 @@ import gc
 import torch
 
 class Hook:
-    def __init__(self):
+    def __init__(self, save_input=True, save_output=False):
+        self._si = save_input
+        self._so = save_output
+
         self.in_activations = []
         self.out_activations = [] 
         return
 
     def __call__(self, module, module_in, module_out):
-        self.in_activations.append(module_in)
-        self.out_activations.append(module_out) 
+        if self._si: self.in_activations.append(module_in)
+        if self._so: self.out_activations.append(module_out) 
         return
 
     def __str__(self):
