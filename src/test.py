@@ -1,8 +1,10 @@
-import torch
+from pathlib import Path as Path
+
 from datasets.cifar import Cifar
 from models.vgg import VGG 
 from activations.activations import Activations
 
+import torch
 from torchvision.models import vgg16, VGG16_Weights
 
 if __name__ == "__main__":
@@ -40,24 +42,22 @@ if __name__ == "__main__":
 
     layers_dict = {'classifier': [0,3],
                   'features': [28]}
-    direction = {'save_input':False, 'save_output':True}
+    direction = {'save_input':True, 'save_output':False}
     model.add_hooks(layers_dict=layers_dict, **direction, verbose=False) 
     
-    i = 0
-    for d in ds.get_test_dataset():
-        img, label = d
-        model._model(img.to(device))
-        for h in model._hooks.values(): 
-            print(len(h.in_activations), len(h.out_activations))
-        if i == 2:
-            for h in model._hooks.values(): 
-                h.clear()
+    activations = Activations()
+    loaders = {
+            #'train': ds.get_train_dataset(),
+            'val': ds.get_val_dataset(),
+            #'test': ds.get_test_dataset()
+               }
 
-        if i == 3: break
-        i += 1
-
-    #activations = Activations(model=model, dataset=ds)
-    #activations.compute_activations(
-    #        layers_dict=layers_dict,
-    #        direction=direction
-    #        )
+    act_dir = Path.cwd()/'../data/activations'
+    act_name = 'activations'
+    act_loaders = activations.compute_activations(
+            path=act_dir,
+            name=act_name,
+            model=model,
+            loaders=loaders
+            )
+    print(act_loaders)

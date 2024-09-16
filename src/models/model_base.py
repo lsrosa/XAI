@@ -11,13 +11,13 @@ class Hook:
         self._si = save_input
         self._so = save_output
 
-        self.in_activations = []
-        self.out_activations = [] 
+        self.in_activations = None 
+        self.out_activations = None 
         return
 
     def __call__(self, module, module_in, module_out):
-        if self._si: self.in_activations.append(module_in)
-        if self._so: self.out_activations.append(module_out) 
+        if self._si: self.in_activations = module_in[0]
+        if self._so: self.out_activations = module_out[0] 
         return
 
     def __str__(self):
@@ -28,8 +28,8 @@ class Hook:
         del self.out_activations
         gc.collect()
 
-        self.in_activations = []
-        self.out_activations = []
+        self.in_activations = None
+        self.out_activations = None 
         return
 
 class ModelBase(metaclass=abc.ABCMeta):
@@ -46,6 +46,9 @@ class ModelBase(metaclass=abc.ABCMeta):
         
         # computed in add_hooks()
         self._hook_handles = None
+    
+    def __call__(self, x):
+        return self._model(x)
 
     def set_model(self, **kwargs):
         '''
@@ -108,6 +111,8 @@ class ModelBase(metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
     def get_hooks(self):
+        if not self._hooks:
+            raise RuntimeError('No hooks available. Please run add_hooks() first.')
         if not self._hook_handles:
             raise RuntimeError('No hook handles available. Please run add_hooks() first.')
-        return self._hook_handles
+        return self._hooks, self._hook_handles
