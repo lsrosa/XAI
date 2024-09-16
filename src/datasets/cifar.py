@@ -133,7 +133,6 @@ class Cifar(DatasetBase):
         self._train_ds = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle_train, **data_kwargs)
         self._val_ds = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, **data_kwargs)
         self._test_ds = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, **data_kwargs)
-
         self._classes = {i: class_name for i, class_name in enumerate(test_dataset.classes)}  
         
         self._loaders = {

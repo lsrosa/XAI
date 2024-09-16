@@ -58,63 +58,16 @@ class Activations():
         3. 'pred'
         4. 'activations'- the name of the key is defined by the inputs string_section and index
         """
-    
-        loaders = self.dataset._loaders
-        device = self.model.device 
-        
-        direction = kwargs['direction'] 
-        
-        layers_dict = kwargs['layers_dict'] if 'layers_dict' in kwargs else self.model.statedict_2_layerskeys() 
-        print(layers_dict)
 
-        for name, module in self.model._model.named_children():
-            print('cccccccccc')
-            print('a', name, 'b', module)
-            if name in layers_dict: 
-                print(layers_dict[name])
-                for idx in layers_dict[name]:
-                    print(module[idx])
-        return 
         dict_activations = {}
         dict_activations['input'] = []
         dict_activations['label'] = []
         dict_activations['pred'] = []
         dict_activations['results'] = []
-        
-        hook_handles = []
-        keys_act = []
-        
-        if direction == 'in':
-            save_activation = SaveInput() 
-        else:
-            save_activation = SaveOutput()
 
-        for key in layers_dict.keys():
-            for index in layers_dict[key]:
-                key_activation = key + '-' + str(index)
-                keys_act.append(key_activation)
-                dict_activations[key_activation] = []
-        
-                if key == 'feat':
-                    print('sono in feat')
-                    for name, layer in model.features.named_children():
-                        if name == str(index):
-                            print(name)
-                            handle = layer.register_forward_hook(save_activation)
-                            hook_handles.append(handle)
-                            print(hook_handles)
-                elif key == 'avgpool':
-                    for name, layer in model.avgpool:
-                        handle = layer.register_forward_hook(save_activation)
-                        hook_handles.append(handle)
-                        print(hook_handles)
-                else:
-                    for name, layer in model.classifier.named_children():
-                        if name == str(index):
-                            handle = layer.register_forward_hook(save_activation)
-                            hook_handles.append(handle)    
-        
-        flatten = nn.Flatten()
+
+        loaders = self.dataset._loaders
+        device = self.model.device 
         
         for data in loader: 
             image, label = data

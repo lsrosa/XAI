@@ -1,9 +1,33 @@
 # General python stuff
 from pathlib import Path as Path
 import abc  
+import gc
 
 # torch stuff
 import torch
+
+class Hook:
+    def __init__(self):
+        self.in_activations = []
+        self.out_activations = [] 
+        return
+
+    def __call__(self, module, module_in, module_out):
+        self.in_activations.append(module_in)
+        self.out_activations.append(module_out) 
+        return
+
+    def __str__(self):
+        return f"\nInputs: {self.in_activations}\nOutputs: {self.out_activations}\n"
+
+    def clear(self):
+        del self.in_activations
+        del self.out_activations
+        gc.collect()
+
+        self.in_activations = []
+        self.out_activations = []
+        return
 
 class ModelBase(metaclass=abc.ABCMeta):
     def __init__(self, **kwargs):
@@ -17,6 +41,9 @@ class ModelBase(metaclass=abc.ABCMeta):
         self._checkpoint = None
         self._state_dict = None
         
+        # computed in add_hooks()
+        self._hook_handles = None
+
     def set_model(self, **kwargs):
         '''
         Set a nn as a model and apply the loaded checkpoint to it.
@@ -74,5 +101,10 @@ class ModelBase(metaclass=abc.ABCMeta):
         return
 
     @abc.abstractmethod
-    def statedict_2_layerskeys(self):
+    def add_hooks(self, **kwargs):
         raise NotImplementedError()
+
+    def get_hooks(self):
+        if not self._hook_handles:
+            raise RuntimeError('No hook handles available. Please run add_hooks() first.')
+        return self._hook_handles

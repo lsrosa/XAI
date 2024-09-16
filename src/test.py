@@ -41,8 +41,23 @@ if __name__ == "__main__":
     layers_dict = {'classifier': [0,3],
                   'features': [28]}
     direction = 'in'
-    activations = Activations(model=model, dataset=ds)
-    activations.compute_activations(
-            layers_dict=layers_dict,
-            direction=direction
-            )
+    model.add_hooks(layers_dict=layers_dict, direction=direction, verbose=True) 
+    
+    i = 0
+    for d in ds.get_test_dataset():
+        img, label = d
+        model._model(img.to(device))
+        for h in model._hooks.values(): 
+            print(len(h.in_activations), len(h.out_activations))
+        if i == 2:
+            for h in model._hooks.values(): 
+                h.clear()
+
+        if i == 3: break
+        i += 1
+
+    #activations = Activations(model=model, dataset=ds)
+    #activations.compute_activations(
+    #        layers_dict=layers_dict,
+    #        direction=direction
+    #        )

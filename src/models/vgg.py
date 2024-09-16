@@ -1,5 +1,5 @@
 # Our stuff
-from models.model_base import ModelBase
+from models.model_base import ModelBase, Hook 
 
 # General python stuff
 from pathlib import Path as Path
@@ -11,24 +11,37 @@ class VGG(ModelBase):
     def __init__(self, **kwargs):
         ModelBase.__init__(self, **kwargs)
         
-    def statedict_2_layerskeys(self):
-        sdk = self._state_dict.keys()
-        print(sdk)
+    def add_hooks(self, **kwargs):
+        direction = kwargs['direction'] 
+         
+        layers_dict = kwargs['layers_dict'] if 'layers_dict' in kwargs else None 
+        verbose = kwargs['verbose'] if 'verbose' in kwargs else False
+        
+        hook_handles = {}
+        hooks = {}
+        
+        # get unique set of keys, removing the '.weights' and '.bias'
+        _keys = sorted(list(set([k.replace('.weight','').replace('.bias','') for k in self._state_dict.keys()])))
 
-        lk = dict()
-        for key in sdk:
+        for key in _keys:
             parts = key.split('.')
-            if parts[2] == 'bias':
+            
+            module_name = parts[0]
+            layer_number = int(parts[1])
+
+            # Check is layers_dict is given, only add hooks for those layers 
+            if layers_dict != None and ((module_name not in layers_dict) or (layer_number not in layers_dict[module_name])):
+                if verbose: print(f'Skipping hook for: {module_name}[{layer_number}]')
                 continue
+            if verbose: print(f'Adding hook for: {module_name}[{layer_number}]')
 
-            module = parts[0]
-            layer = int(parts[1])
-
-            if module not in lk:
-                lk[module] = []
-
-            lk[module].append(layer)
-
-        print('\nlayerskeys\n', lk)
-
-        return lk
+            hook = Hook()
+            layer = self._model._modules[module_name][layer_number]
+            handle = layer.register_forward_hook(hook)
+            hooks[key] = hook
+            hook_handles[key] = handle
+        
+        self._hook_handles = hook_handles
+        self._hooks = hooks
+        return 
+        
