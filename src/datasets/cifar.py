@@ -136,8 +136,7 @@ class Cifar(DatasetBase):
         self._loaders = {
             'train': self._train_ds,
             'val': self._val_ds,
-            'test': self._test_ds,
-            'classes': self._classes
+            'test': self._test_ds
             }
 
         return self._loaders

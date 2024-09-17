@@ -42,22 +42,23 @@ if __name__ == "__main__":
 
     layers_dict = {'classifier': [0,3],
                   'features': [28]}
-    direction = {'save_input':True, 'save_output':False}
+    direction = {'save_input':True, 'save_output':True}
     model.add_hooks(layers_dict=layers_dict, **direction, verbose=False) 
     
     activations = Activations()
     loaders = {
-            #'train': ds.get_train_dataset(),
+            'train': ds.get_train_dataset(),
             'val': ds.get_val_dataset(),
-            #'test': ds.get_test_dataset()
+            'test': ds.get_test_dataset()
                }
 
     act_dir = Path.cwd()/'../data/activations'
     act_name = 'activations'
-    act_loaders = activations.compute_activations(
+    act_loaders = activations.get_activations(
             path=act_dir,
             name=act_name,
             model=model,
             loaders=loaders
             )
-    print(act_loaders)
+    for lk in act_loaders:
+        print(lk, ': ', len(act_loaders[lk].dataset))

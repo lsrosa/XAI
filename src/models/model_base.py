@@ -16,13 +16,15 @@ class Hook:
         return
 
     def __call__(self, module, module_in, module_out):
-        if self._si: self.in_activations = module_in[0]
-        if self._so: self.out_activations = module_out[0] 
+        if self._si: 
+            self.in_activations = module_in[0].detach().cpu()
+        if self._so: 
+            self.out_activations = module_out.detach().cpu()
         return
 
     def __str__(self):
-        return f"\nInputs: {self.in_activations}\nOutputs: {self.out_activations}\n"
-
+        return f"\nInputs shape: {self.in_activations.shape}\nOutputs shape: {self.out_activations.shape}\n"
+    '''
     def clear(self):
         del self.in_activations
         del self.out_activations
@@ -31,6 +33,7 @@ class Hook:
         self.in_activations = None
         self.out_activations = None 
         return
+    '''
 
 class ModelBase(metaclass=abc.ABCMeta):
     def __init__(self, **kwargs):
