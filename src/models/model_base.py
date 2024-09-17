@@ -49,7 +49,12 @@ class ModelBase(metaclass=abc.ABCMeta):
         
         # computed in add_hooks()
         self._hook_handles = None
+        
+        # computed in compute_svds()
+        self._svds = None
     
+        return
+
     def __call__(self, x):
         return self._model(x)
 
@@ -119,3 +124,12 @@ class ModelBase(metaclass=abc.ABCMeta):
         if not self._hook_handles:
             raise RuntimeError('No hook handles available. Please run add_hooks() first.')
         return self._hooks, self._hook_handles
+
+    @abc.abstractmethod
+    def compute_svds(self, **kwargs):
+        raise NotImplementedError()
+
+    def get_svds(self):
+        if not self._svds:
+            raise RuntimeError('No SVDs available. Please run compute_svds() first.')
+        return self._svds

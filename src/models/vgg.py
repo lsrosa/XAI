@@ -45,4 +45,16 @@ class VGG(ModelBase):
         self._hook_handles = hook_handles
         self._hooks = hooks
         return 
+     
+    def compute_svds(self, **kwargs):
         
+        if not self._hooks:
+            raise RuntimeError('No hook handles available. Please run add_hooks() first.')
+        
+        for hk in self._hooks.keys():
+            print(hk)
+            weights = self._state_dict[hk+'.weight']
+            bias = self._state_dict[hk+'.bias']
+            print(weights.shape, bias.shape)
+        # TODO: should probable check https://pytorch.org/docs/stable/generated/torch.nn.Unfold.html
+        return

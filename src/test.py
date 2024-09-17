@@ -44,7 +44,10 @@ if __name__ == "__main__":
                   'features': [28]}
     direction = {'save_input':True, 'save_output':True}
     model.add_hooks(layers_dict=layers_dict, **direction, verbose=False) 
-    
+    model.compute_svds()
+
+    quit()
+
     activations = Activations()
     loaders = {
             'train': ds.get_train_dataset(),
@@ -60,5 +63,3 @@ if __name__ == "__main__":
             model=model,
             loaders=loaders
             )
-    for lk in act_loaders:
-        print(lk, ': ', len(act_loaders[lk].dataset))
