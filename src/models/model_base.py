@@ -8,12 +8,26 @@ import torch
 
 class Hook:
     def __init__(self, save_input=True, save_output=False):
+        self.layer = None 
+        self.handle = None
+
         self._si = save_input
         self._so = save_output
 
         self.in_activations = None 
         self.out_activations = None 
         return
+    
+    def register(self, layer):
+        # check is already registered to a layer
+        if self.layer or self.handle:
+            self.handle.remove()
+            self.handle = None
+            self.layer = None
+        
+        self.layer = layer
+        self.handle = layer.register_forward_hook(self)
+        return self.handle
 
     def __call__(self, module, module_in, module_out):
         if self._si: 
@@ -43,12 +57,15 @@ class ModelBase(metaclass=abc.ABCMeta):
         # set in set_model()
         self._model = None
 
+        # set in set_target_layers()
+        self._target_layers = None 
+
         # computed in load_checkpoint()
         self._checkpoint = None
         self._state_dict = None
         
         # computed in add_hooks()
-        self._hook_handles = None
+        self._hooks = None
         
         # computed in compute_svds()
         self._svds = None
@@ -113,7 +130,48 @@ class ModelBase(metaclass=abc.ABCMeta):
                     print('state_dict keys: \n', v.keys(), '\n')
             print('-----------------\n')
         return
+    
+    def set_target_layers(self, **kwargs):
+        '''
+        Set target layers studied with peephole. Other functions will operate only for the layers specified here: add_hooks() and compute_svds()
 
+        Args:
+        - target_layers (dict): keys are the module names as in the loaded state_dict. 
+        '''
+        tl = kwargs['target_layers'] if 'target_layers' in kwargs else None
+        verbose = kwargs['verbose'] if 'verbose' in kwargs else False
+        
+        if not self._state_dict:
+            raise RuntimeError('No state_dict loaded. Please run load_checkpoint() first.')
+
+        # get unique set of keys, removing the '.weights' and '.bias'
+        _keys = sorted(list(set([k.replace('.weight','').replace('.bias','') for k in self._state_dict.keys()])))
+        
+        _tl = []
+        
+        if not tl:
+            _tl = _keys
+            if verbose: print('Targeting all layers.')
+        else:
+            for key in _keys:
+                parts = key.split('.')
+                module_name = parts[0]
+                layer_number = int(parts[1])
+
+                if ((module_name not in tl) or (layer_number not in tl[module_name])):
+                    if verbose: print(f'Skipping layer: {module_name}[{layer_number}]')
+                    continue
+                if verbose: print(f'Adding layer: {module_name}[{layer_number}]')
+                _tl.append(module_name+'.'+str(layer_number))
+
+        self._target_layers = _tl
+        return
+    
+    def get_target_layers(self):
+        if not self._target_layers:
+            raise RuntimeError('No target_layers available. Please run set_target_layers() first.')
+
+        return self._target_layers
     @abc.abstractmethod
     def add_hooks(self, **kwargs):
         raise NotImplementedError()
@@ -121,15 +179,8 @@ class ModelBase(metaclass=abc.ABCMeta):
     def get_hooks(self):
         if not self._hooks:
             raise RuntimeError('No hooks available. Please run add_hooks() first.')
-        if not self._hook_handles:
-            raise RuntimeError('No hook handles available. Please run add_hooks() first.')
-        return self._hooks, self._hook_handles
+        return self._hooks
 
     @abc.abstractmethod
-    def compute_svds(self, **kwargs):
+    def get_svds(self, **kwargs):
         raise NotImplementedError()
-
-    def get_svds(self):
-        if not self._svds:
-            raise RuntimeError('No SVDs available. Please run compute_svds() first.')
-        return self._svds

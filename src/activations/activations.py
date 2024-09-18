@@ -39,27 +39,25 @@ class Activations():
         model = kwargs['model'] 
         loaders = kwargs['loaders']
         device = model.device 
-        hooks, _ = model.get_hooks()
+        hooks = model.get_hooks()
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
         
         # for saving the ACTivations_DataSetS
         _act_dss = {} 
        
-        for _loader_name in loaders:
-            print(f'\n ---- Getting activations for {_loader_name}\n')
-            file_path = path/(name.name+'.'+_loader_name)
+        for loader_name in loaders:
+            if verbose: print(f'\n ---- Getting activations for {loader_name}\n')
+            file_path = path/(name.name+'.'+loader_name)
             
             if file_path.exists():
-                print(f'File {file_path} exists. Loading from disk.')
-                _act_dss[_loader_name] = torch.load(file_path)
+                if verbose: print(f'File {file_path} exists. Loading from disk.')
+                _act_dss[loader_name] = torch.load(file_path)
                 continue
             
             _acts = ActivationsDataset(hooks.keys())
 
-            loader = loaders[_loader_name]
-             
             # TODO: we should probably stack everything in a big tensor instead of doing this one data at a time
-            for image, label in tqdm(loader): 
+            for image, label in tqdm(loaders[loader_name]): 
                 #print('\nimg, label:', image.shape, label.shape) 
 
                 _image = image.to(device)
@@ -95,19 +93,19 @@ class Activations():
                     print(k, 'total out act: ', _acts.out_activations[k].shape)
                 '''
             
-            _act_dss[_loader_name] = _acts 
+            _act_dss[loader_name] = _acts 
 
             # Save datasets into file
             if verbose: print(f'saving {file_path}')
-            torch.save(_act_dss[_loader_name], file_path)
+            torch.save(_act_dss[loader_name], file_path)
         
         # Create dataloaders for each activationDataset
         self._act_loaders = {}
-        for _loader_name in loaders:
-            bs = loaders[_loader_name].batch_size
-            if verbose: print('creating dataloader for: ', _loader_name)
-            self._act_loaders[_loader_name] = DataLoader(
-                    dataset = _act_dss[_loader_name],
+        for loader_name in loaders:
+            bs = loaders[loader_name].batch_size
+            if verbose: print('creating dataloader for: ', loader_name)
+            self._act_loaders[loader_name] = DataLoader(
+                    dataset = _act_dss[loader_name],
                     batch_size = bs
                     )
 

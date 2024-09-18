@@ -2,6 +2,7 @@
 from models.model_base import ModelBase, Hook 
 
 # General python stuff
+import numpy as np
 from pathlib import Path as Path
 
 # torch stuff
@@ -14,47 +15,62 @@ class VGG(ModelBase):
     def add_hooks(self, **kwargs):
         _si = kwargs['save_input'] if 'save_input' in kwargs else True 
         _so = kwargs['save_output'] if 'save_output' in kwargs else False 
-         
-        layers_dict = kwargs['layers_dict'] if 'layers_dict' in kwargs else None 
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         
-        hook_handles = {}
-        hooks = {}
-        
-        # get unique set of keys, removing the '.weights' and '.bias'
-        _keys = sorted(list(set([k.replace('.weight','').replace('.bias','') for k in self._state_dict.keys()])))
+        if not self._target_layers:
+            raise RuntimeError('No target_layers available. Please run set_target_layers() first.')
 
-        for key in _keys:
+        _hooks = {}
+        for key in self._target_layers:
+            if verbose: print('Adding hook to layer: ', key)
             parts = key.split('.')
-            
-            module_name = parts[0]
-            layer_number = int(parts[1])
-
-            # Check is layers_dict is given, only add hooks for those layers 
-            if layers_dict != None and ((module_name not in layers_dict) or (layer_number not in layers_dict[module_name])):
-                if verbose: print(f'Skipping hook for: {module_name}[{layer_number}]')
-                continue
-            if verbose: print(f'Adding hook for: {module_name}[{layer_number}]')
-
+            layer = self._model._modules[parts[0]][int(parts[1])]
             hook = Hook(save_input=_si, save_output=_so)
-            layer = self._model._modules[module_name][layer_number]
-            handle = layer.register_forward_hook(hook)
-            hooks[key] = hook
-            hook_handles[key] = handle
+            handle = hook.register(layer)
+
+            _hooks[key] = hook
         
-        self._hook_handles = hook_handles
-        self._hooks = hooks
+        self._hooks = _hooks
         return 
      
-    def compute_svds(self, **kwargs):
-        
-        if not self._hooks:
-            raise RuntimeError('No hook handles available. Please run add_hooks() first.')
-        
-        for hk in self._hooks.keys():
-            print(hk)
-            weights = self._state_dict[hk+'.weight']
-            bias = self._state_dict[hk+'.bias']
-            print(weights.shape, bias.shape)
-        # TODO: should probable check https://pytorch.org/docs/stable/generated/torch.nn.Unfold.html
-        return
+    def get_svds(self, **kwargs):
+        verbose = kwargs['verbose'] if 'verbose' in kwargs else False
+        path = Path(kwargs['path'])
+        name = Path(kwargs['name'])
+        # create folder
+        path.mkdir(parents=True, exist_ok=True)
+
+        _svds = {} 
+        for lk in self._target_layers:
+            if verbose: print(f'\n ---- Getting SVDs for {lk}\n')
+            file_path = path/(name.name+'.'+lk)
+            if file_path.exists():
+                if verbose: print(f'File {file_path} exists. Loading from disk.')
+                _svds[lk] = torch.load(file_path)
+                continue
+
+            weight = self._state_dict[lk+'.weight']
+            bias = self._state_dict[lk+'.bias']
+            print(weight.shape, bias.shape, self._hooks[lk].layer)
+            # get layer
+            parts = lk.split('.')
+            layer = self._model._modules[parts[0]][int(parts[1])]
+            if isinstance(layer, torch.nn.Conv2d):
+                print('conv layer')
+                U = torch.rand(2)
+                s = torch.rand(3)
+                Vh = torch.rand(4)
+            elif isinstance(layer, torch.nn.Linear):
+                print('linear layer')
+                W_ = torch.hstack((weight, bias.reshape(-1,1)))
+                U, s, Vh = torch.linalg.svd(W_, full_matrices=False)
+            _svds[lk] = {
+                    'U': U.detach().cpu(),
+                    's': s.detach().cpu(),
+                    'Vh': Vh.detach().cpu()
+                    }
+            if verbose: print(f'saving {file_path}')
+            torch.save(_svds[lk], file_path)
+
+        self._svds = _svds
+        return self._svds

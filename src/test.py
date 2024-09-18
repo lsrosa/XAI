@@ -26,6 +26,8 @@ if __name__ == "__main__":
             seed = seed,
             )
     
+    l=ds.get_train_dataset()
+
     pretrained = True
     model_dir = '/srv/newpenny/XAI/LM/models'
     model_name = f'vgg16_pretrained={pretrained}_dataset={dataset}-'\
@@ -42,18 +44,20 @@ if __name__ == "__main__":
 
     layers_dict = {'classifier': [0,3],
                   'features': [28]}
-    direction = {'save_input':True, 'save_output':True}
-    model.add_hooks(layers_dict=layers_dict, **direction, verbose=False) 
-    model.compute_svds()
+    model.set_target_layers(target_layers=layers_dict, verbose=True)
+    print('target layers: ', model.get_target_layers()) 
 
-    quit()
+    direction = {'save_input':True, 'save_output':True}
+    model.add_hooks(**direction, verbose=False) 
+    
+    svds_path = Path.cwd()/'../data/svds'
+    svds_name = 'svds' 
+    model.get_svds(path=svds_path, name=svds_name, verbose=True)
+    for svd in model._svds.values():
+        print(svd['U'].shape, svd['s'].shape, svd['Vh'].shape)
 
     activations = Activations()
-    loaders = {
-            'train': ds.get_train_dataset(),
-            'val': ds.get_val_dataset(),
-            'test': ds.get_test_dataset()
-               }
+    loaders = ds.get_dataset_loaders()
 
     act_dir = Path.cwd()/'../data/activations'
     act_name = 'activations'
@@ -61,5 +65,6 @@ if __name__ == "__main__":
             path=act_dir,
             name=act_name,
             model=model,
-            loaders=loaders
+            loaders=loaders,
+            verbose=True
             )
