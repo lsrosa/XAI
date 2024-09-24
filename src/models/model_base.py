@@ -66,7 +66,9 @@ class ModelBase(metaclass=abc.ABCMeta):
         
         # computed in add_hooks()
         self._hooks = None
-        
+        self._si = None 
+        self._so = None 
+
         # computed in compute_svds()
         self._svds = None
     

@@ -13,8 +13,8 @@ class VGG(ModelBase):
         ModelBase.__init__(self, **kwargs)
         
     def add_hooks(self, **kwargs):
-        _si = kwargs['save_input'] if 'save_input' in kwargs else True 
-        _so = kwargs['save_output'] if 'save_output' in kwargs else False 
+        self._si = kwargs['save_input'] if 'save_input' in kwargs else True 
+        self._so = kwargs['save_output'] if 'save_output' in kwargs else False 
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         
         if not self._target_layers:
@@ -25,7 +25,7 @@ class VGG(ModelBase):
             if verbose: print('Adding hook to layer: ', key)
             parts = key.split('.')
             layer = self._model._modules[parts[0]][int(parts[1])]
-            hook = Hook(save_input=_si, save_output=_so)
+            hook = Hook(save_input=self._si, save_output=self._so)
             handle = hook.register(layer)
 
             _hooks[key] = hook
