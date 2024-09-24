@@ -1,5 +1,6 @@
 # Our stuff
 from models.model_base import ModelBase, Hook 
+from models.conv2d_to_sparse import conv2d_to_spase as c2s
 
 # General python stuff
 import numpy as np
@@ -7,6 +8,8 @@ from pathlib import Path as Path
 
 # torch stuff
 import torch
+from tensordict import TensorDict
+from tensordict import MemoryMappedTensor as MMT
 
 class VGG(ModelBase):
     def __init__(self, **kwargs):
@@ -39,15 +42,23 @@ class VGG(ModelBase):
         name = Path(kwargs['name'])
         # create folder
         path.mkdir(parents=True, exist_ok=True)
+        
+        _svds = TensorDict()
 
-        _svds = {} 
+        file_path = path/(name.name)
+        if file_path.exists():
+            if verbose: print(f'File {file_path} exists. Loading from disk.')
+            _svds = TensorDict.load_memmap(file_path)
+        
+        _layers_to_compute = []
         for lk in self._target_layers:
-            if verbose: print(f'\n ---- Getting SVDs for {lk}\n')
-            file_path = path/(name.name+'.'+lk)
-            if file_path.exists():
-                if verbose: print(f'File {file_path} exists. Loading from disk.')
-                _svds[lk] = torch.load(file_path)
+            if lk in _svds.keys():
                 continue
+            _layers_to_compute.append(lk)
+        if verbose: print('Layers to compute SVDs: ', _layers_to_compute)
+        
+        for lk in _layers_to_compute:
+            if verbose: print(f'\n ---- Getting SVDs for {lk}\n')
 
             weight = self._state_dict[lk+'.weight']
             bias = self._state_dict[lk+'.bias']
@@ -57,6 +68,7 @@ class VGG(ModelBase):
             layer = self._model._modules[parts[0]][int(parts[1])]
             if isinstance(layer, torch.nn.Conv2d):
                 print('conv layer')
+                W_ = c2s() 
                 U = torch.rand(2)
                 s = torch.rand(3)
                 Vh = torch.rand(4)
@@ -64,13 +76,21 @@ class VGG(ModelBase):
                 print('linear layer')
                 W_ = torch.hstack((weight, bias.reshape(-1,1)))
                 U, s, Vh = torch.linalg.svd(W_, full_matrices=False)
-            _svds[lk] = {
-                    'U': U.detach().cpu(),
-                    's': s.detach().cpu(),
-                    'Vh': Vh.detach().cpu()
-                    }
-            if verbose: print(f'saving {file_path}')
-            torch.save(_svds[lk], file_path)
-
+            _svds[lk] = TensorDict({
+                    'U': MMT(U.detach().cpu()),
+                    's': MMT(s.detach().cpu()),
+                    'Vh': MMT(Vh.detach().cpu())
+                    })
+        
+        if verbose: print(f'saving {file_path}')
+        if len(_layers_to_compute) != 0:
+            _svds.memmap(file_path)
+        
+        ''' 
+        for k in _svds.keys():
+            print('\n', k, ' - U: ', _svds[k]['U'])
+            print(k, ' - s: ', _svds[k]['s'])
+            print(k, ' - Vh: ', _svds[k]['Vh'])
+        '''
         self._svds = _svds
         return self._svds

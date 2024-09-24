@@ -50,13 +50,12 @@ if __name__ == "__main__":
     direction = {'save_input':True, 'save_output':True}
     model.add_hooks(**direction, verbose=False) 
     
-    '''
     svds_path = Path.cwd()/'../data/svds'
     svds_name = 'svds' 
     model.get_svds(path=svds_path, name=svds_name, verbose=True)
     for svd in model._svds.values():
         print(svd['U'].shape, svd['s'].shape, svd['Vh'].shape)
-    '''
+    quit()
 
     activations = Activations()
     loaders = ds.get_dataset_loaders()
