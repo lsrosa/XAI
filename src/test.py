@@ -47,7 +47,7 @@ if __name__ == "__main__":
     model.set_target_layers(target_layers=layers_dict, verbose=True)
     print('target layers: ', model.get_target_layers()) 
 
-    direction = {'save_input':False, 'save_output':True}
+    direction = {'save_input':True, 'save_output':True}
     model.add_hooks(**direction, verbose=False) 
     
     '''
