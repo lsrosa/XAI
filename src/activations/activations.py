@@ -82,12 +82,6 @@ class Activations():
             # pre-allocate predictions, results, activations
             #------------------------------------------------
             
-            # run dummy image on model for getting activations' shapes
-            _img = _act_tds[loader_name]['image'][0]
-            _img = _img.reshape((1,)+_img.shape).to(device)
-            with torch.no_grad():
-                model(_img)
-           
             # check if in and out activations exist
             if model._si and (not ('in_activations' in _act_tds[loader_name])):
                 print('adding in act tensorDict')
@@ -105,14 +99,14 @@ class Activations():
                 # allocate for input activations 
                 if model._si and (not (layer_key in _act_tds[loader_name]['in_activations'])):
                     if verbose: print('allocating in act layer: ', layer_key)
-                    act_shape = hooks[layer_key].in_activations.shape[1:]
+                    act_shape = hooks[layer_key].in_shape
                     _act_tds[loader_name]['in_activations'][layer_key] = MMT.empty(shape=torch.Size((n_samples,)+act_shape))
                     _layers_to_save.append(layer_key)
 
                 # allocate for output activations 
                 if model._so and (not (layer_key in _act_tds[loader_name]['out_activations'])):
                     if verbose: print('allocating out act layer: ', layer_key)
-                    act_shape = hooks[layer_key].out_activations.shape[1:]
+                    act_shape = hooks[layer_key].out_shape
                     _act_tds[loader_name]['out_activations'][layer_key] = MMT.empty(shape=torch.Size((n_samples,)+act_shape))
                     _layers_to_save.append(layer_key)
             

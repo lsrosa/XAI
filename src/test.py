@@ -47,16 +47,19 @@ if __name__ == "__main__":
     model.set_target_layers(target_layers=layers_dict, verbose=True)
     print('target layers: ', model.get_target_layers()) 
 
-    direction = {'save_input':True, 'save_output':True}
+    direction = {'save_input':True, 'save_output':False}
     model.add_hooks(**direction, verbose=False) 
     
+    dry_img, _ = ds._train_ds.dataset[0]
+    dry_img = dry_img.reshape((1,)+dry_img.shape)
+    model.dry_run(x=dry_img)
+
     svds_path = Path.cwd()/'../data/svds'
     svds_name = 'svds' 
     model.get_svds(path=svds_path, name=svds_name, verbose=True)
     for svd in model._svds.values():
         print(svd['U'].shape, svd['s'].shape, svd['Vh'].shape)
     quit()
-
     activations = Activations()
     loaders = ds.get_dataset_loaders()
 

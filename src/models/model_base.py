@@ -13,6 +13,9 @@ class Hook:
 
         self._si = save_input
         self._so = save_output
+        
+        self.in_shape = None
+        self.out_shape = None
 
         self.in_activations = None 
         self.out_activations = None 
@@ -28,6 +31,13 @@ class Hook:
         self.layer = layer
         self.handle = layer.register_forward_hook(self)
         return self.handle
+    
+    def set_shapes(self):
+        if self._si:
+            self.in_shape = self.in_activations.shape[1:]
+        if self._so:
+            self.out_shape = self.out_activations.shape[1:]
+        return
 
     def __call__(self, module, module_in, module_out):
         if self._si: 
@@ -169,11 +179,30 @@ class ModelBase(metaclass=abc.ABCMeta):
         self._target_layers = _tl
         return
     
+    def dry_run(self, **kwargs):
+        '''
+        A dry run is used to collect information from the module, such as activation's sizes
+
+        Args:
+        - x (tensor) - one input for the model set with set_model().
+        '''
+        _img = kwargs['x'].to(self.device)
+        self._model(_img)    
+        
+        if not self._hooks:
+            raise RuntimeError('No hooks available. Please run set_hooks() first.')
+
+        for hk in self._hooks:
+            self._hooks[hk].set_shapes()
+
+        return
+
     def get_target_layers(self):
         if not self._target_layers:
             raise RuntimeError('No target_layers available. Please run set_target_layers() first.')
 
         return self._target_layers
+
     @abc.abstractmethod
     def add_hooks(self, **kwargs):
         raise NotImplementedError()

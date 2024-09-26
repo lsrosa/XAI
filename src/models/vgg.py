@@ -1,6 +1,6 @@
 # Our stuff
 from models.model_base import ModelBase, Hook 
-from models.conv2d_to_sparse import conv2d_to_spase as c2s
+from models.conv2d_to_sparse import conv2d_to_sparse as c2s
 
 # General python stuff
 import numpy as np
@@ -68,10 +68,16 @@ class VGG(ModelBase):
             layer = self._model._modules[parts[0]][int(parts[1])]
             if isinstance(layer, torch.nn.Conv2d):
                 print('conv layer')
-                W_ = c2s() 
+                in_shape = self._hooks[lk].in_shape
+                stride = self._hooks[lk].layer.stride 
+                padding = self._hooks[lk].layer.padding 
+                _W_full = c2s(in_shape, weight, bias, stride=stride, padding=padding) 
+                print(_W_full.shape)
+
                 U = torch.rand(2)
                 s = torch.rand(3)
                 Vh = torch.rand(4)
+
             elif isinstance(layer, torch.nn.Linear):
                 print('linear layer')
                 W_ = torch.hstack((weight, bias.reshape(-1,1)))

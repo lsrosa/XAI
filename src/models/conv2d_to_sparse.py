@@ -1,6 +1,10 @@
 import tqdm
 from scipy.sparse import csr_matrix, coo_matrix
 import scipy
+import numpy as np
+from tqdm import tqdm
+from itertools import product
+import torch
 
 def conv2d_to_sparse(input_shape, weight_tensor, bias, stride=(1, 1), padding=(1, 1)):
     ''' 
@@ -23,20 +27,23 @@ def conv2d_to_sparse(input_shape, weight_tensor, bias, stride=(1, 1), padding=(1
     - csr_mat (scipy.sparse.csr_matrix): The sparse matrix representation of the convolution
       operation in Compressed Sparse Row (CSR) format.
     '''
-    
     Cin, Hin, Win = input_shape
+    print('input shape: ', input_shape, Cin, Hin, Win) 
     Cout = weight_tensor.shape[0]
-    kernel_shape = weight_tensor.shape[2:]
-    kernel = weight_tensor
-    
+    print('Cout: ', Cout)
+    kernel_shape = tuple(weight_tensor.shape[2:])
+    print('kernel shape: ', kernel_shape)
+    kernel = weight_tensor.detach().numpy()
+    bias = bias.detach().numpy()
+    print('kernel: ', kernel)
+
     Hout = int(np.floor((Hin + 2*padding[-2] - (kernel_shape[-2] - 1) -1)/stride[-2] + 1))
     Wout = int(np.floor((Win + 2*padding[-1] - (kernel_shape[-1] - 1) -1)/stride[-1] + 1))
-    print(Hout, Wout)
     
     rows = []
     cols = []
     data = []
-    
+
     for f, i, j, c in tqdm(product(range(Cout), range(Hout), range(Wout), range(Cin))):
         row_start = f * Hout * Wout + i * Wout + j 
         col_start = c * Hin * Win 
@@ -45,18 +52,11 @@ def conv2d_to_sparse(input_shape, weight_tensor, bias, stride=(1, 1), padding=(1
         for m in range(kernel_shape[0]):
             for n in range(kernel_shape[1]):
                 row = row_start
-
                 col = col_start + ((m * Win + n + i * stride[1] * Win + j * stride[0]) % (Win * Hin))
-                # col = col_start + ((m * Win + n + i * stride[1] * Win + j * stride[0]) // stride[1])
-                # col = col_start + ((m * Win + n) // stride[1] + i * Wout + j)
-                # col = col_start + ((m * Win + n) // stride[1] + i * (Win // stride[1]) + j)
-                # col = col_start + ((m * Win + n) // stride[1] + i * ((Win - kernel_shape[1]) // stride[1]) + j)
-                # col = col_start + ((m * Win + n + i * stride[1] * (Win + 2 * padding[-1]) + j * stride[0]) % (Win * Hin))
 
                 rows.append(row)
                 cols.append(col)
                 data.append(weight[m, n])
-
     
     # add bias as the last column
     for f in tqdm(range(Cout)):
@@ -66,13 +66,16 @@ def conv2d_to_sparse(input_shape, weight_tensor, bias, stride=(1, 1), padding=(1
                 rows.append(row)
                 cols.append(Cin * Hin * Win)
                 data.append(bias[f])
+    
+    data, rows, cols = np.array(data), np.array(rows), np.array(cols)
+    print('data len: ', len(data)) 
 
-    # create COO matrix directly
-    coo = coo_matrix((data, (rows, cols)), shape=(Cout * Hout * Wout, Cin * Hin * Win + 1))
-    
     # convert to csr
-    csr_mat = csr_matrix(coo)
+    csr_mat = csr_matrix((data, (rows, cols)), shape=(Cout * Hout * Wout, Cin * Hin * Win + 1))
     
-    return csr_mat
+    print(np.linalg.norm(x1-x2), np.linalg.norm(x1-x3) )
+
+    #_csr_mat = torch.sparse_csr_tensor(rows, cols, data)
+    return csr_mat#, _csr_mat
 
 
