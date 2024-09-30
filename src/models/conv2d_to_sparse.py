@@ -64,40 +64,53 @@ def conv2d_to_sparse2(input_shape, weight, bias, stride=(1, 1), padding=(0, 0), 
 
     Hout = int(np.floor((Hin + 2*padding[0] - dilation[0]*(Hk - 1) -1)/stride[0] + 1))
     Wout = int(np.floor((Win + 2*padding[1] - dilation[1]*(Wk - 1) -1)/stride[1] + 1))
-    #print('hout, wout: ', Hout, Wout)
+    #print('hout, wout: ', Hout, Wout, 'hin, win: ', Hin, Win)
     
     shape_out = torch.Size((Cout*Hout*Wout, Cin*Hin*Win+1))
-    print('shape out: ', shape_out)
+    #print('shape out: ', shape_out)
     
     crow = (torch.linspace(0, shape_out[0], shape_out[0]+1)*(Hk*Wk*Cin+1)).int()
-    print('crow: ', crow)
+    #print('crow: ', crow)
     nnz = crow[-1]
-    print('nnz: ', nnz, Cout*Hout*Wout)
+    #print('nnz: ', nnz, Cout*Hout*Wout)
     
     # getting columns
-    cols = []
-    for f, i, j, c in tqdm(product(range(Cout), range(Hout), range(Wout), range(Cin))):
-        col_start = c * Hin * Win 
+    cols = torch.zeros(Cout*Hout*Wout, Cin*Hk*Wk+1, dtype=torch.int)
+    #print('cols shape: ', cols.shape)
+    
+    base_row = torch.zeros(Cin*Hk*Wk, dtype=torch.int)
+    for cin in range(Cin):
+        c_shift = cin*(Hin*Win)
+        for hk in range(Hk):
+            h_shift = hk*Win
+            for wk in range(Wk):
+                idx = cin*Hk*Wk+hk*Wk+wk
+                w_shift = wk
+                #print('shifts: ', c_shift, h_shift, w_shift)
+                base_row[idx] = c_shift+h_shift+w_shift
+    #print('base row: ', base_row) 
         
-        for m in range(Hk):
-            for n in range(Wk):
-                col = col_start + ((m * Win + n + i * stride[1] * Win + j * stride[0]) % (Win * Hin))
-                cols.append(col)
-    
+    for cout in range(Cout): 
+        for ho in range(Hout):
+            h_shift = ho*Win*stride[0]
+            for wo in range(Wout):
+                w_shift = wo*stride[1]
+                idx = cout*Hout*Wout+ho*Wout+wo
+                #print('shifts: ', h_shift, w_shift)
+                shift = h_shift+w_shift
+                cols[idx,:-1] = base_row+shift
+
     # add bias as the last column                    
-    for f in tqdm(range(Cout)):
-        for i in range(Hout):
-            for j in range(Wout):
-                cols.append(Cin * Hin * Win)
-    
-    cols = torch.tensor(cols)
+    cols[:,-1] = Cin*Hin*Win
+    #print('cols: ', cols) 
+    cols = cols.flatten()
 
     # data is the kernel values, plus bias
-    data = torch.zeros(Cout*Hout*Cout, Cin*Hk*Wk+1)
+    data = torch.zeros(Cout*Hout*Wout, Cin*Hk*Wk+1)
     for cout in range(Cout):
         k = kernel[cout]
         _d = torch.hstack((k.flatten(), bias[cout]))
-        for i, hout in enumerate(range(Hout*Wout)):
+        for i in range(Hout*Wout):
             data[cout*Hout*Wout+i] = _d
     data = data.flatten()
 
