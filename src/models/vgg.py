@@ -71,12 +71,9 @@ class VGG(ModelBase):
                 in_shape = self._hooks[lk].in_shape
                 stride = self._hooks[lk].layer.stride 
                 padding = self._hooks[lk].layer.padding 
-                _W_full = c2s(in_shape, weight, bias, stride=stride, padding=padding) 
-                print(_W_full.shape)
-
-                U = torch.rand(2)
-                s = torch.rand(3)
-                Vh = torch.rand(4)
+                dilation = self._hooks[lk].layer.dilation
+                _W_full = c2s(in_shape, weight, bias, stride=stride, padding=padding, dilation=dilation) 
+                U, s, Vh = torch.svd_lowrank(_W_full, q=300)
 
             elif isinstance(layer, torch.nn.Linear):
                 print('linear layer')
