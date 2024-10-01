@@ -11,6 +11,10 @@ import torch
 from tensordict import TensorDict
 from tensordict import MemoryMappedTensor as MMT
 
+# SVD stuff (will be moved out from here)
+from torch.nn.modules.utils import _reverse_repeat_tuple
+from torch.nn.functional import pad
+
 class VGG(ModelBase):
     def __init__(self, **kwargs):
         ModelBase.__init__(self, **kwargs)
@@ -69,10 +73,16 @@ class VGG(ModelBase):
             if isinstance(layer, torch.nn.Conv2d):
                 print('conv layer')
                 in_shape = self._hooks[lk].in_shape
-                stride = self._hooks[lk].layer.stride 
-                padding = self._hooks[lk].layer.padding 
-                dilation = self._hooks[lk].layer.dilation
-                _W_full = c2s(in_shape, weight, bias, stride=stride, padding=padding, dilation=dilation) 
+                
+                # Apply padding
+                pad_mode = layer.padding_mode if layer.padding_mode != 'zeros' else 'constant'   
+                _dummy_in = torch.zeros(in_shape)
+                _dummy_in_pad = pad(_dummy_in, pad=_reverse_repeat_tuple(layer.padding, 2), mode=pad_mode)
+                print('in and pad shapes: ', in_shape, _dummy_in_pad.shape)
+                stride = layer.stride 
+                dilation = layer.dilation
+                
+                _W_full = c2s(_dummy_in_pad.shape, weight, bias, stride=stride, padding=(0,0), dilation=dilation) 
                 U, s, Vh = torch.svd_lowrank(_W_full, q=300)
 
             elif isinstance(layer, torch.nn.Linear):
