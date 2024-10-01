@@ -43,7 +43,7 @@ if __name__ == "__main__":
     model.set_model(model=nn)
 
     layers_dict = {'classifier': [0,3],
-                  'features': [28]}
+                  'features': [2, 7, 28]}
     model.set_target_layers(target_layers=layers_dict, verbose=True)
     print('target layers: ', model.get_target_layers()) 
 
