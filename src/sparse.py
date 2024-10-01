@@ -5,24 +5,26 @@ from numpy.random import randint as ri
 
 if __name__ == '__main__':
     for i in range(1):
-        nc = ri(2, 20) # n channels
-        kw = ri(2, 10) # kernel width 
-        kh = ri(2, 10) # kernel height
-        iw = ri(10, 50) # image width
-        ih = ri(10, 50) # image height
+        nc = 1 #ri(2, 20) # n channels
+        kw = 3 #ri(2, 10) # kernel width 
+        kh = 3 #ri(2, 10) # kernel height
+        iw = 4 #ri(10, 50) # image width
+        ih = 4 #ri(10, 50) # image height
         ns = 1 # n samples
         cic = nc # conv in channels
-        coc = ri(2, 20) # conv out channels
-        sh = ri(2 ,10)
-        sw = ri(2, 10)
-        
+        coc = 1 #ri(2, 20) # conv out channels
+        sh = 1 #ri(2 ,10)
+        sw = 1 #ri(2, 10)
+        ph = 1 #ri(2, 10) 
+        pw = 0 #ri(2, 10) 
         print('\n-------------------------')
         print('cic, coc: ', cic, coc)
         print('kernel h, w: ', kh, kw)
         print('image h, w: ', ih, iw)
-        print('strid h, w: ', sh, sw)
+        print('stride h, w: ', sh, sw)
+        print('padding h, w: ', ph, pw)
         
-        c = torch.nn.Conv2d(cic, coc, (kh, kw), stride=(sh, sw), dilation=(1,1), padding=(1,1))
+        c = torch.nn.Conv2d(cic, coc, (kh, kw), stride=(sh, sw), dilation=(1,1), padding=(ph,pw))
         w = c.weight
         b = c.bias
         
