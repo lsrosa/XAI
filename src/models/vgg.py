@@ -75,14 +75,11 @@ class VGG(ModelBase):
                 in_shape = self._hooks[lk].in_shape
                 
                 # Apply padding
-                pad_mode = layer.padding_mode if layer.padding_mode != 'zeros' else 'constant'   
-                _dummy_in = torch.zeros(in_shape)
-                _dummy_in_pad = pad(_dummy_in, pad=_reverse_repeat_tuple(layer.padding, 2), mode=pad_mode)
-                print('in and pad shapes: ', in_shape, _dummy_in_pad.shape)
                 stride = layer.stride 
                 dilation = layer.dilation
-                
-                _W_full = c2s(_dummy_in_pad.shape, weight, bias, stride=stride, padding=(0,0), dilation=dilation) 
+                padding = layer.padding
+
+                _W_full = c2s(in_shape, weight, bias, stride=stride, padding=padding, dilation=dilation) 
                 U, s, Vh = torch.svd_lowrank(_W_full, q=300)
 
             elif isinstance(layer, torch.nn.Linear):

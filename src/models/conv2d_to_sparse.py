@@ -1,17 +1,15 @@
-import tqdm
-from scipy.sparse import csr_matrix, coo_matrix
-import scipy
 import numpy as np
-from tqdm import tqdm
-from itertools import product
 import torch
+from warnings import warn
 
-def conv2d_to_sparse(input_shape, weight, bias, stride=(1, 1), padding=(0, 0), dilation=(1,1)):
+def conv2d_to_sparse(input_shape, weight, bias, stride=(1, 1), padding=(0, 0), dilation=(1,1), device='cpu', verbose=False, warns=True):
 
     if dilation != (1,1):
         raise RuntimeError('This functions does not account for dilation, if you extendent it, please send us a PR ;).')
+    
     if padding != (0, 0):
-        raise RuntimeError('This function does not account for padding. Please pad your input accoding to the Conv2d padding.')
+        input_shape = input_shape[0:1] + torch.Size([x+2*y for x, y in zip(input_shape[-2:], padding)])
+        if warns: warn('Do not forget to pad your input accoding to the Conv2d padding. Deactivate this warning passing warns=False as argument.', stacklevel=2)
 
     Cin, Hin, Win = input_shape
     Cout = weight.shape[0]
@@ -49,19 +47,17 @@ def conv2d_to_sparse(input_shape, weight, bias, stride=(1, 1), padding=(0, 0), d
             for wo in range(Wout):
                 w_shift = wo*stride[1]
                 idx = cout*Hout*Wout+ho*Wout+wo
-                #print('shifts: ', h_shift, w_shift)
                 shift = h_shift+w_shift
                 cols[idx,:-1] = base_row+shift
                 data[idx] = _d
 
     # add bias as the last column                    
     cols[:,-1] = Cin*Hin*Win
-    #print('cols: ', cols)
 
     cols = cols.flatten()
     data = data.flatten()
 
-    csr_mat = torch.sparse_csr_tensor(crow, cols, data, size=shape_out)
+    csr_mat = torch.sparse_csr_tensor(crow, cols, data, size=shape_out, device=device)
     return csr_mat 
 
 
