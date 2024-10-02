@@ -1,7 +1,6 @@
 # General python stuff
 from pathlib import Path as Path
 import abc  
-import gc
 
 # torch stuff
 import torch
@@ -48,16 +47,6 @@ class Hook:
 
     def __str__(self):
         return f"\nInputs shape: {self.in_activations.shape}\nOutputs shape: {self.out_activations.shape}\n"
-    '''
-    def clear(self):
-        del self.in_activations
-        del self.out_activations
-        gc.collect()
-
-        self.in_activations = None
-        self.out_activations = None 
-        return
-    '''
 
 class ModelBase(metaclass=abc.ABCMeta):
     def __init__(self, **kwargs):
@@ -78,9 +67,6 @@ class ModelBase(metaclass=abc.ABCMeta):
         self._hooks = None
         self._si = None 
         self._so = None 
-
-        # computed in compute_svds()
-        self._svds = None
     
         return
 
@@ -145,7 +131,7 @@ class ModelBase(metaclass=abc.ABCMeta):
     
     def set_target_layers(self, **kwargs):
         '''
-        Set target layers studied with peephole. Other functions will operate only for the layers specified here: add_hooks() and compute_svds()
+        Set target layers studied with peephole. Other functions will operate only for the layers specified here: add_hooks()
 
         Args:
         - target_layers (dict): keys are the module names as in the loaded state_dict. 
@@ -211,7 +197,3 @@ class ModelBase(metaclass=abc.ABCMeta):
         if not self._hooks:
             raise RuntimeError('No hooks available. Please run add_hooks() first.')
         return self._hooks
-
-    @abc.abstractmethod
-    def get_svds(self, **kwargs):
-        raise NotImplementedError()
