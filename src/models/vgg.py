@@ -5,11 +5,6 @@ from models.model_base import ModelBase, Hook
 import numpy as np
 from pathlib import Path as Path
 
-# torch stuff
-import torch
-from tensordict import TensorDict
-from tensordict import MemoryMappedTensor as MMT
-
 class VGG(ModelBase):
     def __init__(self, **kwargs):
         ModelBase.__init__(self, **kwargs)

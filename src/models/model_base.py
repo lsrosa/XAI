@@ -49,6 +49,9 @@ class Hook:
         return f"\nInputs shape: {self.in_activations.shape}\nOutputs shape: {self.out_activations.shape}\n"
 
 class ModelBase(metaclass=abc.ABCMeta):
+
+    from models.svd import get_svds
+
     def __init__(self, **kwargs):
         # device for NN
         self.device = kwargs['device'] if 'device' in kwargs else 'cpu'
@@ -67,7 +70,9 @@ class ModelBase(metaclass=abc.ABCMeta):
         self._hooks = None
         self._si = None 
         self._so = None 
-    
+        
+        # computed in get_svds()
+        self._svds = None
         return
 
     def __call__(self, x):

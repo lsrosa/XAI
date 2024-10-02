@@ -3,6 +3,7 @@ from pathlib import Path as Path
 from datasets.cifar import Cifar
 from models.vgg import VGG 
 from activations.activations import Activations
+from peepholes.peepholes import Peepholes
 
 import torch
 from torchvision.models import vgg16, VGG16_Weights
@@ -13,6 +14,9 @@ if __name__ == "__main__":
     device = torch.device(f"cuda:{cuda_index}" if use_cuda else "cpu")
     print(f"Using {device} device")
     
+    #--------------------------------
+    # Dataset 
+    #--------------------------------
     # model parameters
     dataset = 'CIFAR100' 
     seed = 29
@@ -26,8 +30,9 @@ if __name__ == "__main__":
             seed = seed,
             )
     
-    l=ds.get_train_dataset()
-
+    #--------------------------------
+    # Model 
+    #--------------------------------
     pretrained = True
     model_dir = '/srv/newpenny/XAI/LM/models'
     model_name = f'vgg16_pretrained={pretrained}_dataset={dataset}-'\
@@ -53,17 +58,13 @@ if __name__ == "__main__":
     dry_img, _ = ds._train_ds.dataset[0]
     dry_img = dry_img.reshape((1,)+dry_img.shape)
     model.dry_run(x=dry_img)
-
-    svds_path = Path.cwd()/'../data/svds'
-    svds_name = 'svds' 
-    model.get_svds(path=svds_path, name=svds_name, verbose=True)
-    for svd in model._svds.values():
-        print(svd['U'].shape, svd['s'].shape, svd['Vh'].shape)
-        print('v', svd['s'])
-    quit()
+    
+    '''
+    #--------------------------------
+    # Activations
+    #--------------------------------
     activations = Activations()
     loaders = ds.get_dataset_loaders()
-
     act_dir = Path.cwd()/'../data/activations'
     act_name = 'activations'
     act_loaders = activations.get_activations(
@@ -73,3 +74,16 @@ if __name__ == "__main__":
             loaders=loaders,
             verbose=True
             )
+    '''
+
+    #--------------------------------
+    # Peepholes 
+    #--------------------------------
+    svds_path = Path.cwd()/'../data/svds'
+    svds_name = 'svds' 
+    model.get_svds(model=model, path=svds_path, name=svds_name, verbose=True)
+    for svd in model._svds.values():
+        print(svd['U'].shape, svd['s'].shape, svd['Vh'].shape)
+        print('v', svd['s'])
+    
+    peepholes = Peepholes()
