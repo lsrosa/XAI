@@ -1,10 +1,14 @@
+# python stuff
 from pathlib import Path as Path
+from numpy.random import randint
 
+# Our stuff
 from datasets.cifar import Cifar
 from models.vgg import VGG 
-from activations.activations import Activations
 from peepholes.peepholes import Peepholes
+from peepholes.svd_peepholes import peep_matrices_from_svds as parser_fn
 
+# torch stuff
 import torch
 from torchvision.models import vgg16, VGG16_Weights
 
@@ -47,7 +51,7 @@ if __name__ == "__main__":
     nn.classifier[-1] = torch.nn.Linear(in_features, num_classes)
     model.set_model(model=nn)
 
-    layers_dict = {'classifier': [0,3],
+    layers_dict = {'classifier': [0, 3],
                   'features': [28]}
     model.set_target_layers(target_layers=layers_dict, verbose=True)
     print('target layers: ', model.get_target_layers()) 
@@ -59,31 +63,47 @@ if __name__ == "__main__":
     dry_img = dry_img.reshape((1,)+dry_img.shape)
     model.dry_run(x=dry_img)
     
-    '''
     #--------------------------------
-    # Activations
-    #--------------------------------
-    activations = Activations()
-    loaders = ds.get_dataset_loaders()
-    act_dir = Path.cwd()/'../data/activations'
-    act_name = 'activations'
-    act_loaders = activations.get_activations(
-            path=act_dir,
-            name=act_name,
-            model=model,
-            loaders=loaders,
-            verbose=True
-            )
-    '''
-
-    #--------------------------------
-    # Peepholes 
+    # SVDs 
     #--------------------------------
     svds_path = Path.cwd()/'../data/svds'
     svds_name = 'svds' 
     model.get_svds(model=model, path=svds_path, name=svds_name, verbose=True)
-    for svd in model._svds.values():
-        print(svd['U'].shape, svd['s'].shape, svd['Vh'].shape)
-        print('v', svd['s'])
+    for k in model._svds.keys():
+        print('svd shapes: ', k, model._svds[k].shape)
+    #--------------------------------
+    # Peepholes 
+    #--------------------------------
+    phs_name = 'peepholes'
+    phs_dir = Path.cwd()/'../data/peepholes'
+    peepholes = Peepholes(
+            path = phs_dir,
+            name = phs_name,
+            )
+    loaders = ds.get_dataset_loaders()
+
+    # copy dataset to peepholes dataset
+    peepholes.get_peep_dataset(
+            loaders = loaders,
+            verbose = True
+            ) 
+
+    peepholes.get_activations(
+            model=model,
+            loaders=loaders,
+            verbose=True
+            )
     
-    peepholes = Peepholes()
+    peepholes.get_peepholes(
+            model = model,
+            peep_matrices = model._svds,
+            parser = parser_fn,
+            verbose = True
+            )
+    '''
+    ranks = dict()
+    for lk in model._target_layers:
+        ranks[lk] = randint(1,5) 
+    print(ranks)
+    parser_kwargs = {'rank': ranks}
+    '''

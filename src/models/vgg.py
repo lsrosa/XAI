@@ -20,6 +20,8 @@ class VGG(ModelBase):
         _hooks = {}
         for key in self._target_layers:
             if verbose: print('Adding hook to layer: ', key)
+
+            # TODO: make a generic get layer function
             parts = key.split('.')
             layer = self._model._modules[parts[0]][int(parts[1])]
             hook = Hook(save_input=self._si, save_output=self._so)

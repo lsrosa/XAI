@@ -91,10 +91,10 @@ def get_svds(self, **kwargs):
     
     for lk in _layers_to_compute:
         if verbose: print(f'\n ---- Getting SVDs for {lk}\n')
-                                                                                                       
         weight = model._state_dict[lk+'.weight']
         bias = model._state_dict[lk+'.bias']
-        print(weight.shape, bias.shape, model._hooks[lk].layer)
+
+        # TODO: make a generic get layer function
         # get layer
         parts = lk.split('.')
         layer = model._model._modules[parts[0]][int(parts[1])]
@@ -106,20 +106,24 @@ def get_svds(self, **kwargs):
             stride = layer.stride 
             dilation = layer.dilation
             padding = layer.padding
-                                                                                                      
-            _W_full = c2s(in_shape, weight, bias, stride=stride, padding=padding, dilation=dilation) 
-            U, s, Vh = torch.svd_lowrank(_W_full, q=300)
-                                                                                                       
+
+            W_ = c2s(in_shape, weight, bias, stride=stride, padding=padding, dilation=dilation) 
+            U, s, V = torch.svd_lowrank(W_, q=300)
+            Vh = V.T
+
         elif isinstance(layer, torch.nn.Linear):
             print('linear layer')
             W_ = torch.hstack((weight, bias.reshape(-1,1)))
             U, s, Vh = torch.linalg.svd(W_, full_matrices=False)
+        else:
+            raise RuntimeError('Unsuported layer type')
+
         _svds[lk] = TensorDict({
                 'U': MMT(U.detach().cpu()),
                 's': MMT(s.detach().cpu()),
                 'Vh': MMT(Vh.detach().cpu())
                 })
-    
+
     if verbose: print(f'saving {file_path}')
     if len(_layers_to_compute) != 0:
         _svds.memmap(file_path)
