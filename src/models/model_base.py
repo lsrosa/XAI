@@ -202,3 +202,8 @@ class ModelBase(metaclass=abc.ABCMeta):
         if not self._hooks:
             raise RuntimeError('No hooks available. Please run add_hooks() first.')
         return self._hooks
+
+
+
+	def load_and_set():
+		

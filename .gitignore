@@ -1,2 +1,3 @@
 xai-venv/
 data/
+*.ipynb_checkpoints*
