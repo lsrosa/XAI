@@ -48,7 +48,7 @@ class Hook:
     def __str__(self):
         return f"\nInputs shape: {self.in_activations.shape}\nOutputs shape: {self.out_activations.shape}\n"
 
-class ModelBase(metaclass=abc.ABCMeta):
+class WrapBase(metaclass=abc.ABCMeta):
 
     from models.svd import get_svds
 
@@ -78,34 +78,13 @@ class ModelBase(metaclass=abc.ABCMeta):
     def __call__(self, x):
         return self._model(x)
 
+
     def set_model(self, **kwargs):
         '''
-        Set a nn as a model and apply the loaded checkpoint to it.
-        Args:
-        - model (torch.nn): Folder where the model is located.
-        - name (str|Path): Model name.
-        - verbose (bool): If True, print checkpoint information.
-        
-        Returns:
-        - a thumbs up
-        '''
-
-        if (not self._checkpoint) or (not self._state_dict):
-            raise RuntimeError('No checkpoint available. Please run load_checkpoint() first.')
-        _model = kwargs['model']    
-        assert(issubclass(type(_model), torch.nn.Module))
-
-        self._model = _model
-        self._model.load_state_dict(self._state_dict) 
-        self._model.to(self.device)
-        self._model.eval()
-        return
-
-    def load_checkpoint(self, **kwargs):
-        '''
-        Load checkpoint information containing model parameters and training information from a file.
+        Set a nn as a model and apply the loaded checkpoint from a file.
         
         Args:
+        - model (torch.nn): neural network
         - path (str|Path): Folder where the model is located.
         - name (str|Path): Model name.
         - verbose (bool): If True, print checkpoint information.
@@ -113,17 +92,19 @@ class ModelBase(metaclass=abc.ABCMeta):
         Returns:
         - a thumbs up
         '''
-
-        verbose = kwargs['verbose'] if 'verbose' in kwargs else False
-
+        # kwargs
+        model = kwargs['model']
         path = Path(kwargs['path'])
         name = Path(kwargs['name'])
         file = path/name
-
+        
+        verbose = kwargs['verbose'] if 'verbose' in kwargs else False
+        
+        # take the checkpoint and the state_dict from the saved file
         self._checkpoint = torch.load(file, map_location=self.device)
         self._state_dict = self._checkpoint['state_dict']
         
-        # see what is saved in the checkpoint (except for the state_dict)
+        # verbose - see what is saved in the checkpoint (except for the state_dict)
         if verbose:
             print('\n-----------------\ncheckpoint\n-----------------')
             for k, v in self._checkpoint.items():
@@ -132,7 +113,17 @@ class ModelBase(metaclass=abc.ABCMeta):
                 else:
                     print('state_dict keys: \n', v.keys(), '\n')
             print('-----------------\n')
+        
+        # assign model    
+        assert(issubclass(type(model), torch.nn.Module))
+        
+        self._model = model
+        self._model.load_state_dict(self._state_dict) 
+        self._model.to(self.device)
+        self._model.eval()
+        
         return
+
     
     def set_target_layers(self, **kwargs):
         '''
@@ -202,8 +193,3 @@ class ModelBase(metaclass=abc.ABCMeta):
         if not self._hooks:
             raise RuntimeError('No hooks available. Please run add_hooks() first.')
         return self._hooks
-
-
-
-	def load_and_set():
-		

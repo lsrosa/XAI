@@ -1,13 +1,13 @@
 # Our stuff
-from models.model_base import ModelBase, Hook 
+from models.wrap_base import WrapBase, Hook 
 
 # General python stuff
 import numpy as np
 from pathlib import Path as Path
 
-class VGG(ModelBase):
+class DummyWrap(WrapBase):
     def __init__(self, **kwargs):
-        ModelBase.__init__(self, **kwargs)
+        WrapBase.__init__(self, **kwargs)
         
     def add_hooks(self, **kwargs):
         self._si = kwargs['save_input'] if 'save_input' in kwargs else True 
