@@ -5,6 +5,23 @@ import abc
 # torch stuff
 import torch
 
+#input dict and m - return 2 arrays
+def flatten_dictionary(d, m):
+    if not isinstance(d, dict): # leaf
+        keys = [str(i) for i in d]
+        layers = [m._modules[str(i)] for i in d]
+        return keys, layers
+    else:
+        keys = []
+        layers = []
+        for k in d:
+            _k, _l = flatten_dictionary(d[k], m._modules[k])
+            _k = [k+'.'+ tempk for tempk in _k]
+            keys += _k
+            layers += _l
+        return keys, layers
+
+
 class Hook:
     def __init__(self, save_input=True, save_output=False):
         self.layer = None 
@@ -124,7 +141,6 @@ class WrapBase(metaclass=abc.ABCMeta):
         
         return
 
-    
     def set_target_layers(self, **kwargs):
         '''
         Set target layers studied with peephole. Other functions will operate only for the layers specified here: add_hooks()
@@ -132,33 +148,25 @@ class WrapBase(metaclass=abc.ABCMeta):
         Args:
         - target_layers (dict): keys are the module names as in the loaded state_dict. 
         '''
-        tl = kwargs['target_layers'] if 'target_layers' in kwargs else None
+        tl_in = kwargs['target_layers'] if 'target_layers' in kwargs else None  #input dict
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         
         if not self._state_dict:
-            raise RuntimeError('No state_dict loaded. Please run load_checkpoint() first.')
+            raise RuntimeError('No state_dict loaded. Please run set_model() first.')
 
+        k_out, l_out = flatten_dictionary(tl_in, self._model)
+        
+        # create the dict
+        tl_out = dict(zip(k_out, l_out))
+        
         # get unique set of keys, removing the '.weights' and '.bias'
         _keys = sorted(list(set([k.replace('.weight','').replace('.bias','') for k in self._state_dict.keys()])))
-        
-        _tl = []
-        
-        if not tl:
-            _tl = _keys
-            if verbose: print('Targeting all layers.')
-        else:
-            for key in _keys:
-                parts = key.split('.')
-                module_name = parts[0]
-                layer_number = int(parts[1])
 
-                if ((module_name not in tl) or (layer_number not in tl[module_name])):
-                    if verbose: print(f'Skipping layer: {module_name}[{layer_number}]')
-                    continue
-                if verbose: print(f'Adding layer: {module_name}[{layer_number}]')
-                _tl.append(module_name+'.'+str(layer_number))
-
-        self._target_layers = _tl
+        # check if the keys you create are present in _keys
+        for k in tl_out:
+            assert(k in _keys)
+        
+        self._target_layers = tl_out
         return
     
     def dry_run(self, **kwargs):
@@ -185,9 +193,26 @@ class WrapBase(metaclass=abc.ABCMeta):
 
         return self._target_layers
 
-    @abc.abstractmethod
     def add_hooks(self, **kwargs):
-        raise NotImplementedError()
+        self._si = kwargs['save_input'] if 'save_input' in kwargs else True 
+        self._so = kwargs['save_output'] if 'save_output' in kwargs else False 
+        verbose = kwargs['verbose'] if 'verbose' in kwargs else False
+        
+        if not self._target_layers:
+            raise RuntimeError('No target_layers available. Please run set_target_layers() first.')
+
+        _hooks = {}
+        for key in self._target_layers:
+            if verbose: print('Adding hook to layer: ', key)
+
+            layer = self._target_layers[key]
+            hook = Hook(save_input=self._si, save_output=self._so)
+            handle = hook.register(layer)
+
+            _hooks[key] = hook
+        
+        self._hooks = _hooks
+        return 
 
     def get_hooks(self):
         if not self._hooks:

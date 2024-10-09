@@ -10,7 +10,7 @@ class SubModel1(nn.Module):
         si = kwargs['input_size']
         output_size = kwargs['output_size']
         hidden_features = kwargs['hidden_features']
-        self.nn1 = nn.Sequential(
+        self.banana = nn.Sequential(
             nn.Linear(si, hidden_features),
             nn.Linear(hidden_features, hidden_features),
             nn.Linear(hidden_features, output_size)

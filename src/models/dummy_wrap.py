@@ -8,7 +8,7 @@ from pathlib import Path as Path
 class DummyWrap(WrapBase):
     def __init__(self, **kwargs):
         WrapBase.__init__(self, **kwargs)
-        
+    '''    
     def add_hooks(self, **kwargs):
         self._si = kwargs['save_input'] if 'save_input' in kwargs else True 
         self._so = kwargs['save_output'] if 'save_output' in kwargs else False 
@@ -31,4 +31,4 @@ class DummyWrap(WrapBase):
         
         self._hooks = _hooks
         return 
-     
+     '''

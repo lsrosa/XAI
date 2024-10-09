@@ -47,3 +47,19 @@ if __name__ == "__main__":
         print('nn parameters: ', p)
 
 
+    # set target layer
+    target_layers_dict = {
+        'nn3': {'banana': [1, 2]},
+        'nn1':{
+            'nn1': {'banana': [2]}, 
+            'nn2':{'banana': [0, 1]}
+            }
+        }
+    
+    dummy.set_target_layers(target_layers=target_layers_dict)
+    for k in dummy._target_layers:
+        layer = dummy._target_layers[k]
+        print(k, ' ', layer.bias)
+
+
+
