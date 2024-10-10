@@ -97,3 +97,44 @@ def get_peepholes(self, **kwargs):
         #-----------------------------------
         if verbose: print(f'Saving {ds_key} to {file_path}.')
         self._peepds[ds_key].memmap(file_path, num_threads=n_threads)
+    return
+
+def test_svds(self, **kwargs):
+    verbose = kwargs['verbose'] if 'verbose' in kwargs else False
+    model = kwargs['model'] 
+    device = model.device 
+    svds = model._svds 
+    for ds_key in self._peepds:
+        if verbose: print(f'\n ---- Testing SVDs for {ds_key}\n')
+        _dl = DataLoader(self._peepds[ds_key], batch_size=64, collate_fn = lambda x: x, shuffle=False) 
+        for lk in model.get_target_layers():
+            if verbose: print(f'\n ---- Testing layer {lk}\n')
+            U = svds[lk]['U']
+            s = torch.diag(svds[lk]['s'])
+            Vh = svds[lk]['Vh']
+
+            layer = model._target_layers[lk]
+            if isinstance(layer, torch.nn.Linear):
+                for bn, data in enumerate(_dl):
+                    n_act = data['in_activations'][lk].shape[0]
+                    in_act = data['in_activations'][lk].contiguous().flatten(start_dim=1)
+                    out_act = data['out_activations'][lk].contiguous().flatten(start_dim=1).to(device)
+                    ones = torch.ones(n_act, 1)
+                    _in_act = torch.hstack((in_act, ones)).to(device)
+                    rec = U@s@Vh@_in_act.reshape(_in_act.shape+(1,))
+                    error = ((out_act-rec.reshape(rec.shape[:2])).abs()/out_act.abs()).mean()*100
+                    print('avg error (%): ', error)
+
+            if isinstance(layer, torch.nn.Conv2d):
+                pad_mode = layer.padding_mode if layer.padding_mode != 'zeros' else 'constant'
+                padding = _reverse_repeat_tuple(layer.padding, 2) 
+                for bn, data in enumerate(tqdm(_dl)):
+                    n_act = data['in_activations'][lk].shape[0]
+                    in_act = pad(data['in_activations'][lk].contiguous(), pad=padding, mode=pad_mode).flatten(start_dim=1)
+                    out_act = data['out_activations'][lk].contiguous().flatten(start_dim=1).to(device)
+
+                    ones = torch.ones(n_act, 1)
+                    _in_act = torch.hstack((in_act, ones)).to(device)
+                    rec = (U@s@Vh).to(device)@_in_act.reshape(_in_act.shape+(1,))
+                    error = ((out_act-rec.reshape(rec.shape[:2])).abs()/out_act.abs()).mean()*100
+                    print('avg error (%): ', error)

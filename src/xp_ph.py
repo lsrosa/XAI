@@ -50,12 +50,12 @@ if __name__ == "__main__":
     model = ModelWrap(device=device)
     model.set_model(model=nn, path=model_dir, name=model_name, verbose=True)
 
-    layers_dict = {'classifier': [0, 3],
-                  'features': [28]}
+    layers_dict = {#'classifier': [0, 3]},
+                   'features': [28]}
     model.set_target_layers(target_layers=layers_dict, verbose=True)
     print('target layers: ', model.get_target_layers()) 
 
-    direction = {'save_input':True, 'save_output':False}
+    direction = {'save_input':True, 'save_output':True}
     model.add_hooks(**direction, verbose=False) 
     
     dry_img, _ = ds._train_ds.dataset[0]
@@ -99,6 +99,11 @@ if __name__ == "__main__":
             model = model,
             peep_matrices = model._svds,
             parser = parser_fn,
+            verbose = True
+            )
+
+    peepholes.test_svds(
+            model = model,
             verbose = True
             )
     '''

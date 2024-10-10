@@ -1,12 +1,13 @@
 # torch stuff
 from torch.utils.data import DataLoader 
+
 # generic python stuff
 from pathlib import Path
 
 class Peepholes():
     from peepholes.activations import get_activations
     from peepholes.dataset import get_peep_dataset 
-    from peepholes.svd_peepholes import get_peepholes
+    from peepholes.svd_peepholes import get_peepholes, test_svds
 
     def __init__(self, **kwargs):
         self.path = Path(kwargs['path'])
