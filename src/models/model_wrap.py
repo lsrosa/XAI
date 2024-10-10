@@ -65,7 +65,7 @@ class Hook:
     def __str__(self):
         return f"\nInputs shape: {self.in_activations.shape}\nOutputs shape: {self.out_activations.shape}\n"
 
-class WrapBase(metaclass=abc.ABCMeta):
+class ModelWrap(metaclass=abc.ABCMeta):
 
     from models.svd import get_svds
 

@@ -16,6 +16,8 @@ def get_peepholes(self, **kwargs):
     model = kwargs['model']
     device = model.device 
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False
+    n_threads = kwargs['n_threads'] if 'n_threads' in kwargs else 32
+
     bs = kwargs['batch_size'] if 'batch_size' in kwargs else 64
     peep_matrices = kwargs['peep_matrices']
     
@@ -66,10 +68,7 @@ def get_peepholes(self, **kwargs):
             peep_m = parser(peep_matrices, lk, **parser_kwargs).to(device)
             if verbose: print(f'\n ---- Getting peepholes for {lk}\n')
             
-            # TODO: make a generic get layer function
-            # get layer
-            parts = lk.split('.')
-            layer = model._model._modules[parts[0]][int(parts[1])]
+            layer = model._target_layers[lk]
             if isinstance(layer, torch.nn.Linear):
                 for bn, data in enumerate(tqdm(_dl)):
                     n_act = data['in_activations'][lk].shape[0]
@@ -97,4 +96,4 @@ def get_peepholes(self, **kwargs):
         # Saving updates to memory
         #-----------------------------------
         if verbose: print(f'Saving {ds_key} to {file_path}.')
-        self._peepds[ds_key].memmap(file_path)
+        self._peepds[ds_key].memmap(file_path, num_threads=n_threads)

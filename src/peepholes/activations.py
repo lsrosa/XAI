@@ -14,6 +14,7 @@ def get_activations(self, **kwargs):
 
     bs = kwargs['batch_size'] if 'batch_size' in kwargs else 64
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
+    n_threads = kwargs['n_threads'] if 'n_threads' in kwargs else 32
 
     if not self._peepds:
         raise RuntimeError('No data found. Please run get_peep_dataset() first.')
@@ -40,20 +41,20 @@ def get_activations(self, **kwargs):
         
         # check if layer in and out activations exist
         _layers_to_save = []
-        for layer_key in model.get_target_layers():
+        for lk in model.get_target_layers():
             # allocate for input activations 
-            if model._si and (not (layer_key in self._peepds[ds_key]['in_activations'])):
-                if verbose: print('allocating in act layer: ', layer_key)
-                act_shape = hooks[layer_key].in_shape
-                self._peepds[ds_key]['in_activations'][layer_key] = MMT.empty(shape=torch.Size((n_samples,)+act_shape))
-                _layers_to_save.append(layer_key)
+            if model._si and (not (lk in self._peepds[ds_key]['in_activations'])):
+                if verbose: print('allocating in act layer: ', lk)
+                act_shape = hooks[lk].in_shape
+                self._peepds[ds_key]['in_activations'][lk] = MMT.empty(shape=torch.Size((n_samples,)+act_shape))
+                _layers_to_save.append(lk)
 
             # allocate for output activations 
-            if model._so and (not (layer_key in self._peepds[ds_key]['out_activations'])):
-                if verbose: print('allocating out act layer: ', layer_key)
-                act_shape = hooks[layer_key].out_shape
-                self._peepds[ds_key]['out_activations'][layer_key] = MMT.empty(shape=torch.Size((n_samples,)+act_shape))
-                _layers_to_save.append(layer_key)
+            if model._so and (not (lk in self._peepds[ds_key]['out_activations'])):
+                if verbose: print('allocating out act layer: ', lk)
+                act_shape = hooks[lk].out_shape
+                self._peepds[ds_key]['out_activations'][lk] = MMT.empty(shape=torch.Size((n_samples,)+act_shape))
+                _layers_to_save.append(lk)
         
         _layers_to_save = list(set(_layers_to_save))
         if verbose: print('Layers to save: ', _layers_to_save)
@@ -89,17 +90,17 @@ def get_activations(self, **kwargs):
                 results = predicted_labels == data['label']
                 self._peepds[ds_key][bn*bs:bn*bs+n_in] = {'pred':predicted_labels, 'result':results}
             
-            for layer_key in _layers_to_save:
+            for lk in _layers_to_save:
                 if model._si:
-                    self._peepds[ds_key][bn*bs:bn*bs+n_in] = {'in_activations': {layer_key: hooks[layer_key].in_activations}}
+                    self._peepds[ds_key][bn*bs:bn*bs+n_in] = {'in_activations': {lk: hooks[lk].in_activations}}
                 if model._so:
-                    self._peepds[ds_key][bn*bs:bn*bs+n_in] = {'out_activations': {layer_key: hooks[layer_key].out_activations}}
+                    self._peepds[ds_key][bn*bs:bn*bs+n_in] = {'out_activations': {lk: hooks[lk].out_activations}}
         
         #-----------------------------------
         # Saving updates to memory
         #-----------------------------------
         if verbose: print(f'Saving {ds_key} to {file_path}.')
-        self._peepds[ds_key].memmap(file_path)
+        self._peepds[ds_key].memmap(file_path, num_threads=n_threads)
 
     return 
 

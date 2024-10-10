@@ -9,6 +9,7 @@ from tensordict import MemoryMappedTensor as MMT
 def get_peep_dataset(self, **kwargs):
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False
     loaders = kwargs['loaders']
+    n_threads = kwargs['n_threads'] if 'n_threads' in kwargs else 32 
 
     _peepds = {}
     _n_samples = {}
@@ -48,7 +49,7 @@ def get_peep_dataset(self, **kwargs):
         
             # Save datasets into file
             if verbose: print(f'saving {file_path}')
-            _peepds[loader_name].memmap(file_path)
+            _peepds[loader_name].memmap(file_path, num_threads=n_threads)
 
         _n_samples[loader_name] = n_samples
     

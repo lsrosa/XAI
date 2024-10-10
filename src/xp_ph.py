@@ -4,7 +4,7 @@ from numpy.random import randint
 
 # Our stuff
 from datasets.cifar import Cifar
-from models.vgg import VGG 
+from models.model_wrap import ModelWrap 
 from peepholes.peepholes import Peepholes
 from peepholes.svd_peepholes import peep_matrices_from_svds as parser_fn
 
@@ -42,14 +42,13 @@ if __name__ == "__main__":
     model_name = f'vgg16_pretrained={pretrained}_dataset={dataset}-'\
     f'augmented_policy=CIFAR10_bs={bs}_seed={seed}.pth'
     
-    model = VGG(device=device)
-    model.load_checkpoint(path=model_dir, name=model_name, verbose=True)
     
     nn = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
     in_features = 4096
     num_classes = len(ds.get_classes()) 
     nn.classifier[-1] = torch.nn.Linear(in_features, num_classes)
-    model.set_model(model=nn)
+    model = ModelWrap(device=device)
+    model.set_model(model=nn, path=model_dir, name=model_name, verbose=True)
 
     layers_dict = {'classifier': [0, 3],
                   'features': [28]}
@@ -70,7 +69,9 @@ if __name__ == "__main__":
     svds_name = 'svds' 
     model.get_svds(model=model, path=svds_path, name=svds_name, verbose=True)
     for k in model._svds.keys():
-        print('svd shapes: ', k, model._svds[k].shape)
+        for kk in model._svds[k].keys():
+            print('svd shapes: ', k, kk, model._svds[k][kk].shape)
+    
     #--------------------------------
     # Peepholes 
     #--------------------------------

@@ -91,13 +91,11 @@ def get_svds(self, **kwargs):
     
     for lk in _layers_to_compute:
         if verbose: print(f'\n ---- Getting SVDs for {lk}\n')
-        weight = model._state_dict[lk+'.weight']
-        bias = model._state_dict[lk+'.bias']
+        layer = model._target_layers[lk]
+        weight = layer.weight 
+        bias = layer.bias 
 
-        # TODO: make a generic get layer function
-        # get layer
-        parts = lk.split('.')
-        layer = model._model._modules[parts[0]][int(parts[1])]
+        if verbose: print('layer: ', layer)
         if isinstance(layer, torch.nn.Conv2d):
             print('conv layer')
             in_shape = model._hooks[lk].in_shape
@@ -112,7 +110,7 @@ def get_svds(self, **kwargs):
             Vh = V.T
 
         elif isinstance(layer, torch.nn.Linear):
-            print('linear layer')
+            if verbose: print('linear layer')
             W_ = torch.hstack((weight, bias.reshape(-1,1)))
             U, s, Vh = torch.linalg.svd(W_, full_matrices=False)
         else:
