@@ -51,7 +51,7 @@ if __name__ == "__main__":
     model.set_model(model=nn, path=model_dir, name=model_name, verbose=True)
 
     layers_dict = {'classifier': [0, 3],
-                  'features': [28]}
+                   'features': [24, 26, 28]}
     model.set_target_layers(target_layers=layers_dict, verbose=True)
     print('target layers: ', model.get_target_layers()) 
 
@@ -87,6 +87,21 @@ if __name__ == "__main__":
     peepholes.get_peep_dataset(
             loaders = loaders,
             verbose = True
+            ) #--------------------------------
+    # Peepholes 
+    #--------------------------------
+    phs_name = 'peepholes'
+    phs_dir = Path.cwd()/'../data/peepholes'
+    peepholes = Peepholes(
+            path = phs_dir,
+            name = phs_name,
+            )
+    loaders = ds.get_dataset_loaders()
+
+    # copy dataset to peepholes dataset
+    peepholes.get_peep_dataset(
+            loaders = loaders,
+            verbose = True
             ) 
 
     peepholes.get_activations(
@@ -101,6 +116,7 @@ if __name__ == "__main__":
             parser = parser_fn,
             verbose = True
             )
+
     
     ph_dl = peepholes.get_dataloaders(batch_size=3, verbose=True)
     i = 0
