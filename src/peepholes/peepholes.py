@@ -34,7 +34,7 @@ class Peepholes():
         _loaders = {}
         for ds_key in self._peepds:
             if verbose: print('creating dataloader for: ', ds_key)
-            self._act_loaders[ds_key] = DataLoader(
+            _loaders[ds_key] = DataLoader(
                     dataset = self._peepds[ds_key],
                     batch_size = bs, 
                     collate_fn = lambda x: x

@@ -101,10 +101,11 @@ if __name__ == "__main__":
             parser = parser_fn,
             verbose = True
             )
-    '''
-    ranks = dict()
-    for lk in model._target_layers:
-        ranks[lk] = randint(1,5) 
-    print(ranks)
-    parser_kwargs = {'rank': ranks}
-    '''
+    
+    ph_dl = peepholes.get_dataloaders(batch_size=3, verbose=True)
+    i = 0
+    print('\nPrinting some shit')
+    for data in ph_dl['train']:
+        print(data['peepholes']['classifier.0'])
+        i += 1
+        if i == 3: break
