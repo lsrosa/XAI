@@ -12,6 +12,11 @@ Export env:
     conda env export | grep -v "^prefix: " > environment.yml
 ```
 
+Update env:
+```sh
+conda env update --file local.yml --prune
+```
+
 ## Deep K-NN
 
 Install FALCONN outside our repo. We will need to update the `pybind11` library used in `faconn` since their version is outdated.
