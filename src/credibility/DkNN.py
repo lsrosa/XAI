@@ -120,8 +120,19 @@ class DkNN:
         self.nb_cali = -1
         self.calibrated = False   
 
-        # Compute training data activations
-        activations = get_activations(trainloader, model, layers)
+        # Extract the desired activations from the dataset peephole
+        data_iterator = iter(train_loader)
+        data = next(data_iterator)
+        
+        activations = {key: [] for key in data['in_activations'].keys()}
+       
+        for data in train_loader:
+            for key, value in data['in_activations'].items():
+                activations[key].append(value)
+
+        for key, value in activations.items():
+            activations[key] = numpy.concatenate(activations[key])
+        
         self.train_activations = activations['activations']
         self.train_labels = activations['targets']
 
@@ -272,7 +283,7 @@ class DkNN:
         print('Nonconformity calculated')
 
         # Create predictions, confidence and credibility
-        _, _, creds = self.preds_conf_cred(knns_not_in_class)
+        preds_knn, confs, creds = self.preds_conf_cred(knns_not_in_class)
         print('Predictions created')
 
         return creds, activations['targets']
