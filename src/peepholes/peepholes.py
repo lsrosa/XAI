@@ -1,4 +1,5 @@
 # torch stuff
+import torch
 from torch.utils.data import DataLoader 
 # generic python stuff
 from pathlib import Path
@@ -24,7 +25,7 @@ class Peepholes():
         return
     
     def get_dataloaders(self, **kwargs):
-        bs = kwargs['batch_size'] if 'batch_size' in kwargs else 64
+        batch_dict = kwargs['batch_dict'] if 'batch_dict' in kwargs else {key: 64 for key in self._peepds}
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
         if self._loaders:
             if verbose: print('Loaders exist. Returning existing ones.')
@@ -36,20 +37,29 @@ class Peepholes():
             if verbose: print('creating dataloader for: ', ds_key)
             _loaders[ds_key] = DataLoader(
                     dataset = self._peepds[ds_key],
-                    batch_size = bs, 
+                    batch_size = batch_dict[ds_key], 
                     collate_fn = lambda x: x
                     )
-            '''
-            for data in self._act_loaders[ds_key]:
-                print(data['image'][5])
-                print(data['label'][5])
-                print(data['pred'][5])
-                print(data['result'][5])
-                for k in data['in_activations'].keys(): 
-                    print(k, data['in_activations'][k][5])
-                for k in data['out_activations'].keys(): 
-                    print(k, data['out_activations'][k][5])
-                break
-            '''
+
         self._loaders = _loaders 
         return self._loaders
+        
+    def get_act_from_ds(self, model, portion):
+        """
+        Extract the activations specific for a set of layer and the labels for a specific dataset
+        """
+        dataloader = self._loaders[portion]
+        if dataloader.batch_size == len(dataloader.dataset):
+            activations = {}
+            for data in dataloader:
+                labels = data['label'].detach().cpu().numpy()
+                for key,layer in model._target_layers.items():
+                    if isinstance(layer, torch.nn.Linear):
+                        activations[key] = data['in_activations'][key].detach().cpu().numpy()
+                    if isinstance(layer, torch.nn.Conv2d):
+                        flatten_act = data['in_activations'][key].flatten(start_dim=1)
+                        activations[key] = flatten_act.detach().cpu().numpy()
+        else:
+            raise RuntimeError('set DataLoader batch_size equal to the length of the dataset')
+
+        return activations, labels
