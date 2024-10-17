@@ -1,3 +1,14 @@
+import numpy as np
+
+import enum
+import copy
+from bisect import bisect_left
+import warnings
+import platform
+import falconn
+
+import torch
+
 class NearestNeighbor:
 
     class BACKEND(enum.Enum):
@@ -91,10 +102,29 @@ class NearestNeighbor:
 
         return missing_indices
 
+def get_act_from_ds(peephole, model, portion):
+    """
+    Extract the activations specific for a set of layer and the labels for a specific dataset
+    """
+    dataloader = peephole._loaders[portion]
+    if dataloader.batch_size == len(dataloader.dataset):
+        activations = {}
+        for data in dataloader:
+            labels = data['label'].detach().cpu().numpy().astype(int)
+            for key,layer in model._target_layers.items():
+                if isinstance(layer, torch.nn.Linear):
+                    activations[key] = data['in_activations'][key].detach().cpu().numpy()
+                if isinstance(layer, torch.nn.Conv2d):
+                    flatten_act = data['in_activations'][key].flatten(start_dim=1)
+                    activations[key] = flatten_act.detach().cpu().numpy()
+    else:
+        raise RuntimeError('set DataLoader batch_size equal to the length of the dataset')
+
+    return activations, labels 
 
 class DkNN:
 
-    def __init__(self, model, nb_classes, neighbors, layers, trainloader, nearest_neighbor_backend, nb_tables=200, number_bits=17):
+    def __init__(self, model, nb_classes, neighbors, layers, peepholes, percentage, seed, nearest_neighbor_backend, nb_tables=200, number_bits=17):
         """
         Implementation of the DkNN algorithm, see https://arxiv.org/abs/1803.04765 for more details
         :param model: model to be used
@@ -113,29 +143,26 @@ class DkNN:
         self.nb_classes = nb_classes
         self.neighbors = neighbors
         self.layers = layers
+        self.peephole = peepholes
+        self.percentage = percentage
+        self.seed = seed
         self.backend = nearest_neighbor_backend
         self.nb_tables = nb_tables
         self.number_bits = number_bits
 
         self.nb_cali = -1
-        self.calibrated = False   
-
-        # Extract the desired activations from the dataset peephole
-        data_iterator = iter(train_loader)
-        data = next(data_iterator)
+        self.calibrated = False
         
-        activations = {key: [] for key in data['in_activations'].keys()}
-       
-        for data in train_loader:
-            for key, value in data['in_activations'].items():
-                activations[key].append(value)
-
-        for key, value in activations.items():
-            activations[key] = numpy.concatenate(activations[key])
         
-        self.train_activations = activations['activations']
-        self.train_labels = activations['targets']
-
+        activations, labels = get_act_from_ds(peephole=self.peephole, model=self.model, portion='train')
+        idx = np.arange(0, len(labels))
+        rng = np.random.default_rng(self.seed)
+        num_elements_to_select = int(len(labels)*(self.percentage['train']/100))
+        idx_rand = rng.choice(idx, size=num_elements_to_select, replace=False)
+        
+        self.train_activations = {key: value[idx_rand] for key, value in activations.items()}
+        self.train_labels = labels[idx_rand]
+        
         # Build locality-sensitive hashing tables for training representations
         self.train_activations_lsh = copy.copy(self.train_activations)
         self.init_lsh()
@@ -175,7 +202,7 @@ class DkNN:
         print()
 
 
-    def calibrate(self, calibloader):
+    def calibrate(self, portion='val'):
         """
         Runs the DkNN on holdout data to calibrate the credibility metric
         :param calibloader: data loader for the calibration loader
@@ -184,20 +211,29 @@ class DkNN:
         print()
 
         # Compute calibration data activations
-        self.nb_cali = len(calibloader.dataset)
-        activations = get_activations(calibloader, self.model, self.layers)
-        self.cali_activations = activations['activations']
-        self.cali_labels = activations['targets']
+        activations, cali_labels = get_act_from_ds(peephole=self.peephole, model=self.model, portion=portion)
+        # self.nb_cali = len(cali_labels)
+
+        idx = np.arange(0, len(cali_labels))
+        rng = np.random.default_rng(self.seed)
+        num_elements_to_select = int(len(cali_labels)*(self.percentage[portion]/100))
+        idx_rand = rng.choice(idx, size=num_elements_to_select, replace=False)
+        
+        self.cali_activations = {key: value[idx_rand] for key, value in activations.items()}
+        self.cali_labels = cali_labels[idx_rand]
+        self.nb_cali = len(cali_labels[idx_rand])
 
         print("## Starting calibration of DkNN")
 
         cali_knns_ind, cali_knns_labels = self.find_train_knns(self.cali_activations)
+        cali_knns_ind = cali_knns_ind
+        cali_knns_labels = cali_knns_labels
         assert all([v.shape == (self.nb_cali, self.neighbors) for v in cali_knns_ind.values()])
         assert all([v.shape == (self.nb_cali, self.neighbors) for v in cali_knns_labels.values()])
 
         cali_knns_not_in_class = self.nonconformity(cali_knns_labels)
         cali_knns_not_in_l = np.zeros(self.nb_cali, dtype=np.int32)
-
+        
         for i in range(self.nb_cali):
             cali_knns_not_in_l[i] = cali_knns_not_in_class[i, self.cali_labels[i]]
 
@@ -215,7 +251,7 @@ class DkNN:
         """
         knns_ind = {}
         knns_labels = {}
-
+        # for lk in data_activations:
         for layer in self.layers:
             # Pre-process representations of data to normalize and remove training data mean
             data_activations_layer = copy.copy(data_activations[layer])
@@ -263,30 +299,56 @@ class DkNN:
 
         return knns_not_in_class
 
-    def fprop(self, testloader):
+    def fprop(self, portion):
         """
         Performs a forward pass through the DkNN on an numpy array of data
         """
         print('---------- DkNN predict')
         print()
-
         if not self.calibrated:
-            raise ValueError("DkNN needs to be calibrated by calling DkNNModel.calibrate method once before inferring")
-
-        # Compute test data activations
-        activations = get_activations(testloader, self.model, self.layers)
-        data_activations = activations['activations']
-        _, knns_labels = self.find_train_knns(data_activations)
-
-        # Calculate nonconformity
-        knns_not_in_class = self.nonconformity(knns_labels)
-        print('Nonconformity calculated')
-
-        # Create predictions, confidence and credibility
-        preds_knn, confs, creds = self.preds_conf_cred(knns_not_in_class)
-        print('Predictions created')
-
-        return creds, activations['targets']
+                raise ValueError("DkNN needs to be calibrated by calling DkNNModel.calibrate method once before inferring")
+            
+        if portion == 'all':
+            scores = {}
+            for ds_key in self.peephole._loaders.keys():
+                data_activations, test_labels = get_act_from_ds(peephole=self.peephole, model=self.model, portion=ds_key)
+                _, knns_labels = self.find_train_knns(data_activations)
+        
+                # Calculate nonconformity
+                knns_not_in_class = self.nonconformity(knns_labels)
+                print('Nonconformity calculated')
+        
+                # Create predictions, confidence and credibility
+                preds_knn, confs, creds, p_value = self.preds_conf_cred(knns_not_in_class)
+                print('Predictions created')
+                scores[ds_key] = {'preds_knn': preds_knn, 
+                                  'confs': confs, 
+                                  'creds': creds,
+                                  'p_value': p_value}
+            return scores
+            
+        else:   
+            data_activations, test_labels = get_act_from_ds(peephole=self.peephole, model=self.model, portion=portion)
+    
+            idx = np.arange(0, len(test_labels))
+            rng = np.random.default_rng(self.seed)
+            num_elements_to_select = int(len(test_labels)*(self.percentage[portion]/100))
+            idx_rand = rng.choice(idx, size=num_elements_to_select, replace=False)
+            
+            data_activations = {key: value[idx_rand] for key, value in data_activations.items()}
+            test_labels = test_labels[idx_rand]
+            
+            _, knns_labels = self.find_train_knns(data_activations)
+    
+            # Calculate nonconformity
+            knns_not_in_class = self.nonconformity(knns_labels)
+            print('Nonconformity calculated')
+    
+            # Create predictions, confidence and credibility
+            preds_knn, confs, creds, p_value = self.preds_conf_cred(knns_not_in_class)
+            print('Predictions created')
+    
+            return preds_knn, confs, creds, p_value, test_labels 
 
     def preds_conf_cred(self, knns_not_in_class):
         """
@@ -295,19 +357,20 @@ class DkNN:
         """
         nb_data = knns_not_in_class.shape[0]
         preds_knn = np.zeros(nb_data, dtype=np.int32)
-        confs = np.zeros((nb_data, self.nb_classes), dtype=np.float32)
-        creds = np.zeros((nb_data, self.nb_classes), dtype=np.float32)
+        confs = np.zeros(nb_data, dtype=np.float32)
+        creds = np.zeros(nb_data, dtype=np.float32)
+        p_value = np.zeros((nb_data, self.nb_classes), dtype=np.float32)
 
         for i in range(nb_data):
             # p-value of test input for each class
-            p_value = np.zeros(self.nb_classes, dtype=np.float32)
+            # p_value = np.zeros(self.nb_classes, dtype=np.float32)
 
             for class_id in range(self.nb_classes):
                 # p-value of (test point, candidate label)
-                p_value[class_id] = (float(self.nb_cali) - bisect_left(self.cali_nonconformity, knns_not_in_class[i, class_id])) / float(self.nb_cali)
+                p_value[i][class_id] = (float(self.nb_cali) - bisect_left(self.cali_nonconformity, knns_not_in_class[i, class_id])) / float(self.nb_cali)
 
-            preds_knn[i] = np.argmax(p_value)
-            confs[i, preds_knn[i]] = 1. - np.sort(p_value)[-2]
-            creds[i, preds_knn[i]] = p_value[preds_knn[i]]
+            preds_knn[i] = np.argmax(p_value[i])
+            confs[i] = 1. - np.sort(p_value[i])[-2]
+            creds[i] = np.max(p_value[i])
 
-        return preds_knn, confs, creds
+        return preds_knn, confs, creds, p_value
