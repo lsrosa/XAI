@@ -66,6 +66,7 @@ def c2s(input_shape, weight, bias, stride=(1, 1), padding=(0, 0), dilation=(1,1)
     csr_mat = torch.sparse_csr_tensor(crow, cols, data, size=shape_out, device=device)
     return csr_mat 
 
+#TODO: clean the model as parameter since the function is inside the model
 def get_svds(self, **kwargs):
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False
     path = Path(kwargs['path'])
