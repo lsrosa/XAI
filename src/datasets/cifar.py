@@ -78,6 +78,7 @@ class Cifar(DatasetBase):
 
         data_augmentation = kwargs['data_augmentation'] if 'data_augmentation' in kwargs else False
         
+        #TODO: this should be false as default, tbh we should set all as false and remove the arg
         shuffle_train = kwargs['suffle_train'] if 'shuffle_train' in kwargs else True
         
         # set torch seed
