@@ -311,7 +311,7 @@ def compute_scores(k,
 
     # fit clustering models for each layer
     for layer in layers_list:
-        clustering[layer] = Clustering(algorithm, k, n_clusters, random_state=seed)
+        clustering[layer] = Clustering(algorithm, k, n_clusters, seed=seed)
         labels = data['true_labels']['train']
         clustering[layer].fit(data['core_vectors']['train'][layer], labels)
 
