@@ -277,44 +277,84 @@ def prepare_data(ph_dl, layers_list, k):
         'decisions': decisions
         }
 
-def compute_scores(k, n_clusters, algorithm, layers_list, data, all_scores, metadata, seed=42, splits=None):
-    '''
-    "class-probs" are the NEW PEEPHOLES!
-    Here you can compute max and entropy starting from them.
-    Updates:
-    - 'all_scores' (TensorDict: results container (which has to be already initialized)
-    - 'metadata' (dict): records the configuration for which we have saved results
-    if novel keys are detected.
-    - 
-    '''
+#from sklearn.utils import check_random_state
+
+def compute_scores(k, 
+                   n_clusters, 
+                   algorithm, 
+                   layers_list, 
+                   data, 
+                   peephole_scores, 
+                   all_scores, 
+                   compute_scores=False, 
+                   seed=42):
+    """
+    Compute the clustering scores based on the new peepholes (class probabilities).
+    Updates the peephole_scores container with the core vectors and includes RNG information.
+
+    Args:
+        k (int): Dimension of core vectors.
+        n_clusters (int): Number of clusters for the clustering algorithm.
+        algorithm (str): Clustering algorithm to use (e.g., 'gmm', 'kmeans').
+        layers_list (list): List of layers to compute scores for.
+        data (dict): Dictionary containing the core vectors and true labels.
+        peephole_scores (TensorDict): TensorDict to store peephole scores.
+        all_scores (TensorDict): TensorDict to store all computed scores.
+        compute_scores (bool): Whether to compute and update all_scores.
+        seed (int): Random seed for reproducibility.
+    """
+    
     clustering = {}
-    for layer in tqdm(layers_list):
-        clustering[layer] = Clustering(algorithm, k, n_clusters, seed=seed)
+    
+    # initialize random state for reproducibility
+    #rng = check_random_state(seed)
+
+    # fit clustering models for each layer
+    for layer in layers_list:
+        clustering[layer] = Clustering(algorithm, k, n_clusters, random_state=seed)
         labels = data['true_labels']['train']
         clustering[layer].fit(data['core_vectors']['train'][layer], labels)
 
-    # compute max and entropy scores for both 'train' and 'val'
-    if splits==None: # fa schifo ma era una toppa
-        for split in ['train', 'val']:
-            for layer in layers_list:
-                # make sure layer is in data['core_vectors'][split].keys()
-                class_probs = clustering[layer].map_clusters_to_classes(data['core_vectors'][split][layer])
+    # create peephole_scores structure and eventually include RNG information
+    for split in ['train', 'val']:
+        if str(k) not in peephole_scores.keys():
+            peephole_scores.set(str(k), TensorDict({}, batch_size=[]))
+
+        if str(n_clusters) not in peephole_scores[str(k)].keys():
+            n_samples = len(data['core_vectors'][split][layers_list[0]])  # get sample size from any layer
+            n_classes = len(set(data['true_labels']['train']))  # get number of unique labels (n_classes)
+            
+            peephole_scores[str(k)].set(str(n_clusters), TensorDict({
+                split: MMT.empty(shape=(n_samples, n_classes)) 
+            }, batch_size=[]))
+
+            # store the RNG seed information
+            #peephole_scores[str(k)][str(n_clusters)][split]['rng_seed'] = seed
+
+        for layer in layers_list:
+            # map clusters to class probabilities
+            class_probs = clustering[layer].map_clusters_to_classes(data['core_vectors'][split][layer])
+            peephole_scores[str(k)][str(n_clusters)][split][layer] = class_probs  
+
+            if compute_scores:
+                # compute max and entropy scores for both splits
                 _max = clustering[layer].get_confidence_scores(class_probs, split=split, score_type='max')
                 _entropy = clustering[layer].get_confidence_scores(class_probs, split=split, score_type='entropy')
-    
+                
+                # update the all_scores container with computed values (if necessary)
+                if str(k) not in all_scores.keys():
+                    all_scores.set(str(k), TensorDict({}, batch_size=[]))
+                
+                if str(n_clusters) not in all_scores[str(k)].keys():
+                    all_scores[str(k)].set(str(n_clusters), TensorDict({
+                        'train': MMT.empty(shape=(len(data['core_vectors']['train'][layers_list[0]]),)),  # pre-allocate for training
+                        'val': MMT.empty(shape=(len(data['core_vectors']['val'][layers_list[0]]),))  # pre-allocate for validation
+                    }, batch_size=[]))
+
                 all_scores[str(k)][str(n_clusters)][split][layer] = {
                     'max': _max,
                     'entropy': _entropy
                 }
 
-    # update metadata with string representations
-    if str(k) not in metadata['k_values']:
-        print('Updating keys')
-        metadata['k_values'].append(str(k))
-    if str(n_clusters) not in metadata['n_clusters']:
-        print('Updating keys')
-        metadata['n_clusters'].append(str(n_clusters))
-    for layer in layers_list:
-        if layer not in metadata['layers']:
-            print('Updating keys')
-            metadata['layers'].append(layer)
+    print(f"Computed scores for k={k}, n_clusters={n_clusters} with RNG seed={seed}")
+
