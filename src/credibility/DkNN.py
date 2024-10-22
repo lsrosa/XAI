@@ -8,6 +8,9 @@ import platform
 import falconn
 
 import torch
+from tensordict import TensorDict
+from tensordict import MemoryMappedTensor as MMT
+from torch.utils.data import DataLoader
 
 class NearestNeighbor:
 
@@ -121,10 +124,10 @@ def get_act_from_ds(peephole, model, portion):
         raise RuntimeError('set DataLoader batch_size equal to the length of the dataset')
 
     return activations, labels 
-
+    
 class DkNN:
 
-    def __init__(self, model, nb_classes, neighbors, layers, peepholes, percentage, seed, nearest_neighbor_backend, nb_tables=200, number_bits=17):
+    def __init__(self, model, nb_classes, neighbors, layers, peephole, percentage, seed, verbose, nearest_neighbor_backend, nb_tables=200, number_bits=17):
         """
         Implementation of the DkNN algorithm, see https://arxiv.org/abs/1803.04765 for more details
         :param model: model to be used
@@ -143,9 +146,10 @@ class DkNN:
         self.nb_classes = nb_classes
         self.neighbors = neighbors
         self.layers = layers
-        self.peephole = peepholes
+        self.peephole = peephole
         self.percentage = percentage
         self.seed = seed
+        self.verbose = verbose
         self.backend = nearest_neighbor_backend
         self.nb_tables = nb_tables
         self.number_bits = number_bits
@@ -153,11 +157,13 @@ class DkNN:
         self.nb_cali = -1
         self.calibrated = False
         
-        
-        activations, labels = get_act_from_ds(peephole=self.peephole, model=self.model, portion='train')
-        idx = np.arange(0, len(labels))
+        portion = 'train'
+        activations, labels = get_act_from_ds(peephole=self.peephole, model=self.model, portion=portion)
+
+        n_samples = len(labels)
+        idx = np.arange(0, n_samples)
         rng = np.random.default_rng(self.seed)
-        num_elements_to_select = int(len(labels)*(self.percentage['train']/100))
+        num_elements_to_select = int(n_samples*(self.percentage[portion]/100))
         idx_rand = rng.choice(idx, size=num_elements_to_select, replace=False)
         
         self.train_activations = {key: value[idx_rand] for key, value in activations.items()}
@@ -212,11 +218,11 @@ class DkNN:
 
         # Compute calibration data activations
         activations, cali_labels = get_act_from_ds(peephole=self.peephole, model=self.model, portion=portion)
-        # self.nb_cali = len(cali_labels)
 
-        idx = np.arange(0, len(cali_labels))
+        n_samples = len(cali_labels)
+        idx = np.arange(0, n_samples)
         rng = np.random.default_rng(self.seed)
-        num_elements_to_select = int(len(cali_labels)*(self.percentage[portion]/100))
+        num_elements_to_select = int(n_samples*(self.percentage[portion]/100))
         idx_rand = rng.choice(idx, size=num_elements_to_select, replace=False)
         
         self.cali_activations = {key: value[idx_rand] for key, value in activations.items()}
@@ -310,7 +316,22 @@ class DkNN:
             
         if portion == 'all':
             scores = {}
-            for ds_key in self.peephole._loaders.keys():
+            for ds_key in self.peephole._peepds:
+                if self.verbose: print(f'\n ---- Getting activations for {ds_key}\n')
+                file_path = self.peephole._file_paths[ds_key]
+                n_samples = self.peephole._n_samples[ds_key] 
+                print(n_samples)
+                
+                if not ('scores' in self.peephole._peepds[ds_key]):
+                    if self.verbose: print('adding scores tensorDict')
+                    self.peephole._peepds[ds_key]['scores'] = TensorDict(batch_size=n_samples)
+                elif self.verbose: print('Scores exist.')
+
+                if not ('DkNN' in self.peephole._peepds[ds_key]['scores']):
+                    if self.verbose: print('adding DkNN tensorDict')
+                    self.peephole._peepds[ds_key]['scores']['DkNN'] = TensorDict(batch_size=n_samples)
+                elif self.verbose: print('Scores exist.')
+                    
                 data_activations, test_labels = get_act_from_ds(peephole=self.peephole, model=self.model, portion=ds_key)
                 _, knns_labels = self.find_train_knns(data_activations)
         
@@ -320,24 +341,40 @@ class DkNN:
         
                 # Create predictions, confidence and credibility
                 preds_knn, confs, creds, p_value = self.preds_conf_cred(knns_not_in_class)
-                print('Predictions created')
-                scores[ds_key] = {'preds_knn': preds_knn, 
-                                  'confs': confs, 
-                                  'creds': creds,
-                                  'p_value': p_value}
-            return scores
-            
+                #  TODO find a way to put multiple keys 
+                #  layer_list, percentages for training and calibration
+                key = (self.neighbors, list(self.model._target_layers.keys()), list(self.percentage.values())[:-1])
+
+                self.peephole._peepds[ds_key]['scores']['DkNN'][key] = {'preds_knn' : MMT.empty(shape=torch.Size((n_samples,))), 
+                                                                        'confs' : MMT.empty(shape=torch.Size((n_samples,))),
+                                                                        'creds' : MMT.empty(shape=torch.Size((n_samples,))),
+                                                                        'p_value' : MMT.empty(shape=torch.Size((n_samples,)+(self.nb_classes,)))}
+
+                # self.peephole._peepds[ds_key]['scores']['DkNN'][key]['preds_knn'] = MMT.empty(shape=torch.Size((n_samples,)))
+                # self.peephole._peepds[ds_key]['scores']['DkNN'][key]['confs'] = MMT.empty(shape=torch.Size((n_samples,)))
+                # self.peephole._peepds[ds_key]['scores']['DkNN'][key]['creds'] = MMT.empty(shape=torch.Size((n_samples,)))
+                # self.peephole._peepds[ds_key]['scores']['DkNN'][key]['p_value'] = MMT.empty(shape=torch.Size((n_samples,)+(self.nb_classes,)))
+                self.peephole._peepds[ds_key]['scores']['DkNN'][key] = {'preds_knn' : troch.Tensor(preds_knn), 
+                                                                        'confs' : troch.Tensor(confs),
+                                                                        'creds' : troch.Tensor(creds),
+                                                                        'p_value' : troch.Tensor(p_value)}
+                if self.verbose: print(f'Saving {ds_key} to {file_path}.')
+                self.peephole._peepds[ds_key].memmap(file_path, num_threads=n_threads)
         else:   
+            
             data_activations, test_labels = get_act_from_ds(peephole=self.peephole, model=self.model, portion=portion)
-    
-            idx = np.arange(0, len(test_labels))
-            rng = np.random.default_rng(self.seed)
-            num_elements_to_select = int(len(test_labels)*(self.percentage[portion]/100))
-            idx_rand = rng.choice(idx, size=num_elements_to_select, replace=False)
-            
-            data_activations = {key: value[idx_rand] for key, value in data_activations.items()}
-            test_labels = test_labels[idx_rand]
-            
+
+            if self.percentage[portion] != 100:
+                
+                n_samples = len(test_labels)
+                idx = np.arange(0, n_samples)
+                rng = np.random.default_rng(self.seed)
+                num_elements_to_select = int(n_samples*(self.percentage[portion]/100))
+                idx_rand = rng.choice(idx, size=num_elements_to_select, replace=False)
+                
+                data_activations = {key: value[idx_rand] for key, value in data_activations.items()}
+                test_labels = test_labels[idx_rand]
+
             _, knns_labels = self.find_train_knns(data_activations)
     
             # Calculate nonconformity

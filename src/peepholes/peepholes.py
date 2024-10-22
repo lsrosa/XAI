@@ -43,23 +43,3 @@ class Peepholes():
 
         self._loaders = _loaders 
         return self._loaders
-        
-    def get_act_from_ds(self, model, portion):
-        """
-        Extract the activations specific for a set of layer and the labels for a specific dataset
-        """
-        dataloader = self._loaders[portion]
-        if dataloader.batch_size == len(dataloader.dataset):
-            activations = {}
-            for data in dataloader:
-                labels = data['label'].detach().cpu().numpy()
-                for key,layer in model._target_layers.items():
-                    if isinstance(layer, torch.nn.Linear):
-                        activations[key] = data['in_activations'][key].detach().cpu().numpy()
-                    if isinstance(layer, torch.nn.Conv2d):
-                        flatten_act = data['in_activations'][key].flatten(start_dim=1)
-                        activations[key] = flatten_act.detach().cpu().numpy()
-        else:
-            raise RuntimeError('set DataLoader batch_size equal to the length of the dataset')
-
-        return activations, labels
