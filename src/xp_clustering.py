@@ -49,7 +49,7 @@ if __name__ == "__main__":
     k_list = [20, 50, 70, 100]
     n_clusters_list = [50, 100, 150, 200]
     layers_list = available_layers
-    algorithm = 'gmm'
+    algorithm = 'kmeans'
     
     # check for existing results or init results container
     res_dir = 'clustering/confidence_scores'
@@ -167,6 +167,7 @@ if __name__ == "__main__":
             # after processing layers, check if we need to initialize all_scores
             if str_n_clusters not in all_scores[str_k].keys() or not all(layer in peephole_scores[str_k][str_n_clusters]['train'].keys() and peephole_scores[str_k][str_n_clusters]['train'][layer].numel() > 0 for layer in layers_list):
                 print(f'Initializing all_scores for k={k}, n_clusters={n_clusters}')
+                print('CHECK THIS PART!')
                 data = prepare_data(ph_dl, layers_list, k)
     
                 n_samples_train = len(data['core_vectors']['train'][layers_list[0]])

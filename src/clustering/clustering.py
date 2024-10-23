@@ -226,7 +226,7 @@ class Clustering: # quella buona
         return attrs
 
 
-def prepare_data(ph_dl, layers_list, k):
+def prepare_data(ph_dl, layers_list, k, splits=None):
     """
     Prepares data for all splits (train, val, etc.).
     
@@ -238,7 +238,8 @@ def prepare_data(ph_dl, layers_list, k):
     Returns:
       dict: A dictionary containing core vectors, labels, and decisions for all splits.
     """
-    splits = ['train', 'val']
+    if splits==None:
+        splits = ['train', 'val']
     
     core_vectors = {}
     v_labels = {}
@@ -318,7 +319,7 @@ def compute_scores(k,
         clustering[layer].fit(data['core_vectors']['train'][layer], labels)
 
     # create peephole_scores structure and eventually include RNG information
-    for split in ['train', 'val']:
+    for split in ['train', 'val']: # add test splits
         if str(k) not in peephole_scores.keys():
             peephole_scores.set(str(k), TensorDict({}, batch_size=[]))
 
