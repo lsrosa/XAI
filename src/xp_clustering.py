@@ -9,10 +9,6 @@ from peepholes.peepholes import Peepholes
 from clustering.clustering import Clustering
 from clustering.clustering import prepare_data, compute_scores
 
-# sklearn stuff
-#from sklearn.mixture import GaussianMixture
-#from sklearn.cluster import KMeans
-
 if __name__ == "__main__":
     
     use_cuda = torch.cuda.is_available()
@@ -32,7 +28,7 @@ if __name__ == "__main__":
     ds = Cifar(dataset=dataset)
     
     ds.load_data(batch_size=bs, data_kwargs={'num_workers': 4, 'pin_memory': True}, seed=seed) 
-    print('Loading the ex-peepholes')
+    print('Loading the "ex"-peepholes')
     
     phs_name = 'peepholes'
     phs_dir = os.path.join(abs_path, 'peepholes')
@@ -40,17 +36,17 @@ if __name__ == "__main__":
     loaders = ds.get_dataset_loaders()
     
     # Copy dataset to peepholes dataset
-    peepholes.get_peep_dataset(loaders=loaders, verbose=True) 
-    ph_dl = peepholes.get_dataloaders(batch_size=128, verbose=True)
+    peepholes.get_peep_dataset(loaders=loaders, verbose=False) 
+    ph_dl = peepholes.get_dataloaders(batch_size=128, verbose=False)
     
     available_layers = list(next(iter(ph_dl['train']))['peepholes'].keys())
     
     #---------------------------------------
     # "New" peepholes and confidence scores
     #---------------------------------------
-    print('Computing confidence scores')
+    print('Computing peepholes and confidence scores')
 
-    k_list = [20, 50, 70]
+    k_list = [20, 50, 70, 100]
     n_clusters_list = [50, 100, 150, 200]
     layers_list = available_layers
     algorithm = 'gmm'
