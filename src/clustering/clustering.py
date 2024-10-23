@@ -4,6 +4,7 @@ import torch
 from tqdm import tqdm
 
 from tensordict import TensorDict
+from tensordict import MemoryMappedTensor as MMT
 
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import KMeans
@@ -321,11 +322,13 @@ def compute_scores(k,
             peephole_scores.set(str(k), TensorDict({}, batch_size=[]))
 
         if str(n_clusters) not in peephole_scores[str(k)].keys():
-            n_samples = len(data['core_vectors'][split][layers_list[0]])  # get sample size from any layer
-            n_classes = len(set(data['true_labels']['train']))  # get number of unique labels (n_classes)
+            n_samples = len(data['core_vectors'][split][layers_list[0]])  # sample size from any layer
+            n_classes = len(set(data['true_labels']['train']))  # number of unique labels (n_classes)
             
+            layer_dict = TensorDict({layer: MMT.empty(shape=(n_samples, n_classes)) for layer in layers_list}, batch_size=[])
+
             peephole_scores[str(k)].set(str(n_clusters), TensorDict({
-                split: MMT.empty(shape=(n_samples, n_classes)) 
+                split: layer_dict
             }, batch_size=[]))
 
             # store the RNG seed information
@@ -338,6 +341,7 @@ def compute_scores(k,
 
             if compute_scores:
                 # compute max and entropy scores for both splits
+                # can be improved
                 _max = clustering[layer].get_confidence_scores(class_probs, split=split, score_type='max')
                 _entropy = clustering[layer].get_confidence_scores(class_probs, split=split, score_type='entropy')
                 
@@ -347,9 +351,14 @@ def compute_scores(k,
                 
                 if str(n_clusters) not in all_scores[str(k)].keys():
                     all_scores[str(k)].set(str(n_clusters), TensorDict({
-                        'train': MMT.empty(shape=(len(data['core_vectors']['train'][layers_list[0]]),)),  # pre-allocate for training
-                        'val': MMT.empty(shape=(len(data['core_vectors']['val'][layers_list[0]]),))  # pre-allocate for validation
+                        'train': TensorDict({
+                            layer: MMT.empty(shape=(len(data['core_vectors']['train'][layer]),)) for layer in layers_list
+                        }, batch_size=[]),
+                        'val': TensorDict({
+                            layer: MMT.empty(shape=(len(data['core_vectors']['val'][layer]),)) for layer in layers_list
+                        }, batch_size=[])
                     }, batch_size=[]))
+
 
                 all_scores[str(k)][str(n_clusters)][split][layer] = {
                     'max': _max,
