@@ -63,7 +63,7 @@ class Clustering: # quella buona
         Args:
         - labels (Tensor): True class labels for the samples (n_samples, )
         '''
-        print(len(self._cluster_assignments))
+        # print(len(self._cluster_assignments))
         n_samples = len(labels)
         n_classes = len(torch.unique(labels))
         
@@ -104,6 +104,7 @@ class Clustering: # quella buona
             cluster_probs = torch.exp(-distances ** 2 / (2 * (distances.std() ** 2)))  # Gaussian-like softmax
             cluster_probs = cluster_probs / cluster_probs.sum(dim=1, keepdim=True)  # normalize to probabilities
             return cluster_probs
+            
 
     def map_clusters_to_classes(self, core_vectors):
         '''
