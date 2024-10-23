@@ -51,7 +51,7 @@ if __name__ == "__main__":
     model.set_model(model=nn, path=model_dir, name=model_name, verbose=True)
 
     layers_dict = {'classifier': [0, 3],
-                   'features': [24, 26, 28]}
+                   'features': [7, 14, 24, 26, 28]}
     model.set_target_layers(target_layers=layers_dict, verbose=True)
     print('target layers: ', model.get_target_layers()) 
 
@@ -65,7 +65,8 @@ if __name__ == "__main__":
     #--------------------------------
     # SVDs 
     #--------------------------------
-    svds_path = Path.cwd()/'../data/svds'
+    #svds_path = Path.cwd()/'../data/svds'
+    svds_path = '/srv/newpenny/XAI/generated_data/svds'
     svds_name = 'svds' 
     model.get_svds(model=model, path=svds_path, name=svds_name, verbose=True)
     for k in model._svds.keys():
@@ -76,26 +77,13 @@ if __name__ == "__main__":
     # Peepholes 
     #--------------------------------
     phs_name = 'peepholes'
-    phs_dir = Path.cwd()/'../data/peepholes'
+    # phs_dir = Path.cwd()/'../data/peepholes'
+    phs_dir = '/srv/newpenny/XAI/generated_data/peepholes'
     peepholes = Peepholes(
             path = phs_dir,
             name = phs_name,
             )
-    loaders = ds.get_dataset_loaders()
-
-    # copy dataset to peepholes dataset
-    peepholes.get_peep_dataset(
-            loaders = loaders,
-            verbose = True
-            ) #--------------------------------
-    # Peepholes 
-    #--------------------------------
-    phs_name = 'peepholes'
-    phs_dir = Path.cwd()/'../data/peepholes'
-    peepholes = Peepholes(
-            path = phs_dir,
-            name = phs_name,
-            )
+    
     loaders = ds.get_dataset_loaders()
 
     # copy dataset to peepholes dataset
