@@ -162,9 +162,23 @@ class DkNN:
 
         n_samples = len(labels)
         idx = np.arange(0, n_samples)
-        rng = np.random.default_rng(self.seed)
-        num_elements_to_select = int(n_samples*(self.percentage[portion]/100))
-        idx_rand = rng.choice(idx, size=num_elements_to_select, replace=False)
+        rng = np.random.default_rng(seed)
+        idx_rand = []
+        
+        for l in np.arange(0,self.nb_classes):
+            idx_l = np.argwhere(labels==l)
+            n_samples_l = len(idx_l)
+            num_elements_to_select = int(n_samples_l*(percentage[portion]/100))
+            rng.shuffle(idx_l)
+            idx_rand.append(idx_l[:num_elements_to_select])
+        
+        idx_rand = np.concatenate(idx_rand)
+        print(np.bincount(labels[idx_rand[:,0]]))
+        print(np.bincount(labels))
+        # TODO shuffle agli indici percentuale per classe
+        # rng = np.random.default_rng(self.seed)
+        # num_elements_to_select = int(n_samples*(self.percentage[portion]/100))
+        # idx_rand = rng.choice(idx, size=num_elements_to_select, replace=False)
         
         self.train_activations = {key: value[idx_rand] for key, value in activations.items()}
         self.train_labels = labels[idx_rand]
@@ -221,9 +235,17 @@ class DkNN:
 
         n_samples = len(cali_labels)
         idx = np.arange(0, n_samples)
-        rng = np.random.default_rng(self.seed)
-        num_elements_to_select = int(n_samples*(self.percentage[portion]/100))
-        idx_rand = rng.choice(idx, size=num_elements_to_select, replace=False)
+        rng = np.random.default_rng(seed)
+        idx_rand = []
+        
+        for l in np.arange(0,self.nb_classes):
+            idx_l = np.argwhere(labels==l)
+            n_samples_l = len(idx_l)
+            num_elements_to_select = int(n_samples_l*(percentage[portion]/100))
+            rng.shuffle(idx_l)
+            idx_rand.append(idx_l[:num_elements_to_select])
+        
+        idx_rand = np.concatenate(idx_rand)
         
         self.cali_activations = {key: value[idx_rand] for key, value in activations.items()}
         self.cali_labels = cali_labels[idx_rand]
@@ -345,19 +367,19 @@ class DkNN:
                 #  layer_list, percentages for training and calibration
                 key = (self.neighbors, list(self.model._target_layers.keys()), list(self.percentage.values())[:-1])
 
-                self.peephole._peepds[ds_key]['scores']['DkNN'][key] = {'preds_knn' : MMT.empty(shape=torch.Size((n_samples,))), 
-                                                                        'confs' : MMT.empty(shape=torch.Size((n_samples,))),
-                                                                        'creds' : MMT.empty(shape=torch.Size((n_samples,))),
-                                                                        'p_value' : MMT.empty(shape=torch.Size((n_samples,)+(self.nb_classes,)))}
+                # self.peephole._peepds[ds_key]['scores']['DkNN'][key] = {'preds_knn' : MMT.empty(shape=torch.Size((n_samples,))), 
+                #                                                         'confs' : MMT.empty(shape=torch.Size((n_samples,))),
+                #                                                         'creds' : MMT.empty(shape=torch.Size((n_samples,))),
+                #                                                         'p_value' : MMT.empty(shape=torch.Size((n_samples,)+(self.nb_classes,)))}
 
-                # self.peephole._peepds[ds_key]['scores']['DkNN'][key]['preds_knn'] = MMT.empty(shape=torch.Size((n_samples,)))
-                # self.peephole._peepds[ds_key]['scores']['DkNN'][key]['confs'] = MMT.empty(shape=torch.Size((n_samples,)))
-                # self.peephole._peepds[ds_key]['scores']['DkNN'][key]['creds'] = MMT.empty(shape=torch.Size((n_samples,)))
-                # self.peephole._peepds[ds_key]['scores']['DkNN'][key]['p_value'] = MMT.empty(shape=torch.Size((n_samples,)+(self.nb_classes,)))
-                self.peephole._peepds[ds_key]['scores']['DkNN'][key] = {'preds_knn' : troch.Tensor(preds_knn), 
-                                                                        'confs' : troch.Tensor(confs),
-                                                                        'creds' : troch.Tensor(creds),
-                                                                        'p_value' : troch.Tensor(p_value)}
+                # # self.peephole._peepds[ds_key]['scores']['DkNN'][key]['preds_knn'] = MMT.empty(shape=torch.Size((n_samples,)))
+                # # self.peephole._peepds[ds_key]['scores']['DkNN'][key]['confs'] = MMT.empty(shape=torch.Size((n_samples,)))
+                # # self.peephole._peepds[ds_key]['scores']['DkNN'][key]['creds'] = MMT.empty(shape=torch.Size((n_samples,)))
+                # # self.peephole._peepds[ds_key]['scores']['DkNN'][key]['p_value'] = MMT.empty(shape=torch.Size((n_samples,)+(self.nb_classes,)))
+                # self.peephole._peepds[ds_key]['scores']['DkNN'][key] = {'preds_knn' : troch.Tensor(preds_knn), 
+                #                                                         'confs' : troch.Tensor(confs),
+                #                                                         'creds' : troch.Tensor(creds),
+                #                                                         'p_value' : troch.Tensor(p_value)}
                 if self.verbose: print(f'Saving {ds_key} to {file_path}.')
                 self.peephole._peepds[ds_key].memmap(file_path, num_threads=n_threads)
         else:   
@@ -368,9 +390,17 @@ class DkNN:
                 
                 n_samples = len(test_labels)
                 idx = np.arange(0, n_samples)
-                rng = np.random.default_rng(self.seed)
-                num_elements_to_select = int(n_samples*(self.percentage[portion]/100))
-                idx_rand = rng.choice(idx, size=num_elements_to_select, replace=False)
+                rng = np.random.default_rng(seed)
+                idx_rand = []
+                
+                for l in np.arange(0,self.nb_classes):
+                    idx_l = np.argwhere(labels==l)
+                    n_samples_l = len(idx_l)
+                    num_elements_to_select = int(n_samples_l*(percentage[portion]/100))
+                    rng.shuffle(idx_l)
+                    idx_rand.append(idx_l[:num_elements_to_select])
+                
+                idx_rand = np.concatenate(idx_rand)
                 
                 data_activations = {key: value[idx_rand] for key, value in data_activations.items()}
                 test_labels = test_labels[idx_rand]
