@@ -76,13 +76,13 @@ def get_svds(self, **kwargs):
     # create folder
     path.mkdir(parents=True, exist_ok=True)
     
-    _svds = TensorDict()
-
     file_path = path/(name.name)
     if file_path.exists():
         if verbose: print(f'File {file_path} exists. Loading from disk.')
         _svds = TensorDict.load_memmap(file_path)
-    
+    else: 
+        _svds = TensorDict()
+
     _layers_to_compute = []
     for lk in model._target_layers:
         if lk in _svds.keys():

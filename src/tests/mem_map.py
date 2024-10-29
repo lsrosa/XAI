@@ -27,6 +27,7 @@ if __name__ == '__main__':
     for j in range(n_dicts):
         td['a%d'%j] = MMT.empty(shape=(n,ds))
     
+    td = td.memmap_like('./banana')
     # makes one dict for each input
     for i in range(n):
         d = {}
@@ -34,23 +35,23 @@ if __name__ == '__main__':
         for j in range(2):
             d['a%d'%j] = torch.rand((1, ds))
         td[i] = TensorDict(d) 
-
     print('saving', sys.getsizeof(td))
-    td.memmap("./banana")
-    
+
     # try add stuff after memmap
+    del td
+    td = TensorDict.load_memmap('./banana')
     td['b'] = TensorDict(batch_size=n)
     for j in range(n_dicts):
         td['b']['b%d'%j] = MMT.empty(shape=(n,ds))
+    td = td.memmap_like('./banana')
+    
     for i in range(n):
         d = {'b':{}}
         # create data
         for j in range(2):
             d['b']['b%d'%j] = torch.rand((1, ds))
         td[i] = TensorDict(d) 
-    
     # must memmap again
-    td.memmap("./banana")
     print('saving again')
     p(td, 5)
     del td

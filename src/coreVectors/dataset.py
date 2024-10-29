@@ -6,12 +6,12 @@ import torch
 from tensordict import TensorDict
 from tensordict import MemoryMappedTensor as MMT
 
-def get_peep_dataset(self, **kwargs):
+def get_coreVec_dataset(self, **kwargs):
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False
     loaders = kwargs['loaders']
     n_threads = kwargs['n_threads'] if 'n_threads' in kwargs else 32 
 
-    _peepds = {}
+    _corevds = {}
     _n_samples = {}
     _file_paths = {}
 
@@ -23,13 +23,15 @@ def get_peep_dataset(self, **kwargs):
         
         if file_path.exists():
             if verbose: print(f'File {file_path} exists. Loading from disk.')
-            _peepds[loader_name] = TensorDict.load_memmap(file_path)
-            n_samples = len(_peepds[loader_name])
+            _corevds[loader_name] = TensorDict.load_memmap(file_path)
+            _corevds[loader_name].lock_()
+            n_samples = len(_corevds[loader_name])
             if verbose: print('loaded n_samples: ', n_samples)
         else:
             n_samples = len(loaders[loader_name].dataset)
             if verbose: print('loader n_samples: ', n_samples) 
-            _peepds[loader_name] = TensorDict(batch_size=n_samples) #TODO: check device
+            #TODO: check device
+            _td = TensorDict(batch_size=n_samples)
             
             #------------------------
             # copy images and labels
@@ -38,23 +40,22 @@ def get_peep_dataset(self, **kwargs):
             # get shapes for pre-allocation
             _img, _label = loaders[loader_name].dataset[0]
             # pre-allocate
-            _peepds[loader_name]['image'] = MMT.empty(shape=torch.Size((n_samples,)+_img.shape)) 
-            _peepds[loader_name]['label'] = MMT.empty(shape=torch.Size((n_samples,))) 
-                                                                                                   
+            _td['image'] = MMT.empty(shape=torch.Size((n_samples,)+_img.shape)) 
+            _td['label'] = MMT.empty(shape=torch.Size((n_samples,))) 
+
+            if verbose: print('Allocating data')
+            _corevds[loader_name] = _td.memmap_like(file_path, num_threads=n_threads)
+
             if verbose: print('Copying images and labels')
             for bn, data in enumerate(tqdm(loaders[loader_name])): 
                 images, labels = data
                 n_in = len(images)
-                _peepds[loader_name][bn*bs:bn*bs+n_in] = {'image':images, 'label':labels}
+                _corevds[loader_name][bn*bs:bn*bs+n_in] = {'image':images, 'label':labels}
         
-            # Save datasets into file
-            if verbose: print(f'saving {file_path}')
-            _peepds[loader_name].memmap(file_path, num_threads=n_threads)
-
         _n_samples[loader_name] = n_samples
     
     # save computed data within the class
     self._file_paths = _file_paths
     self._n_samples = _n_samples
-    self._peepds = _peepds
+    self._corevds = _corevds
     return

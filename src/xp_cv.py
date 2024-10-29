@@ -5,8 +5,8 @@ from numpy.random import randint
 # Our stuff
 from datasets.cifar import Cifar
 from models.model_wrap import ModelWrap 
-from peepholes.peepholes import Peepholes
-from peepholes.svd_peepholes import peep_matrices_from_svds as parser_fn
+from coreVectors.coreVectors import CoreVectors 
+from coreVectors.svd_coreVectors import reduct_matrices_from_svds as parser_fn
 
 # torch stuff
 import torch
@@ -17,7 +17,7 @@ if __name__ == "__main__":
     cuda_index = torch.cuda.device_count() - 2
     device = torch.device(f"cuda:{cuda_index}" if use_cuda else "cpu")
     print(f"Using {device} device")
-    
+
     #--------------------------------
     # Dataset 
     #--------------------------------
@@ -26,8 +26,10 @@ if __name__ == "__main__":
     seed = 29
     bs = 64
 
-    ds = Cifar(dataset=dataset)
-
+    ds = Cifar(
+            data_path = '/srv/newpenny/dataset/CIFAR100',
+            dataset=dataset
+            )
     ds.load_data(
             batch_size = bs,
             data_kwargs = {'num_workers': 4, 'pin_memory': True},
@@ -38,10 +40,9 @@ if __name__ == "__main__":
     # Model 
     #--------------------------------
     pretrained = True
-    model_dir = '/srv/newpenny/XAI/LM/models'
+    model_dir = '/srv/newpenny/XAI/models'
     model_name = f'vgg16_pretrained={pretrained}_dataset={dataset}-'\
     f'augmented_policy=CIFAR10_bs={bs}_seed={seed}.pth'
-    
     
     nn = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
     in_features = 4096
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     model.set_model(model=nn, path=model_dir, name=model_name, verbose=True)
 
     layers_dict = {'classifier': [0, 3],
-                  'features': [24, 26, 28]}
+                   'features': [28]}
     model.set_target_layers(target_layers=layers_dict, verbose=True)
     print('target layers: ', model.get_target_layers()) 
 
@@ -65,47 +66,49 @@ if __name__ == "__main__":
     #--------------------------------
     # SVDs 
     #--------------------------------
-    svds_path = Path.cwd()/'../data/svds'
+    #svds_path = '/srv/newpenny/XAI/generated_data/svds'
+    svds_path = Path.cwd()/'../data'
     svds_name = 'svds' 
     model.get_svds(model=model, path=svds_path, name=svds_name, verbose=True)
     for k in model._svds.keys():
         for kk in model._svds[k].keys():
             print('svd shapes: ', k, kk, model._svds[k][kk].shape)
-    
     #--------------------------------
-    # Peepholes 
+    # CoreVectors 
     #--------------------------------
-    phs_name = 'peepholes'
-    phs_dir = Path.cwd()/'../data/peepholes'
-    peepholes = Peepholes(
+    phs_name = 'corevectors'
+    #phs_dir = '/srv/newpenny/XAI/generated_data/corevectors'
+    phs_dir = Path.cwd()/'../data/corevectors'
+    cv = CoreVectors(
             path = phs_dir,
             name = phs_name,
             )
+    
     loaders = ds.get_dataset_loaders()
 
-    # copy dataset to peepholes dataset
-    peepholes.get_peep_dataset(
+    # copy dataset to coreVect dataset
+    cv.get_coreVec_dataset(
             loaders = loaders,
             verbose = True
             ) 
 
-    peepholes.get_activations(
+    cv.get_activations(
             model=model,
             loaders=loaders,
             verbose=True
             )
     
-    peepholes.get_peepholes(
+    cv.get_coreVectors(
             model = model,
-            peep_matrices = model._svds,
+            reduct_matrices = model._svds,
             parser = parser_fn,
             verbose = True
             )
     
-    ph_dl = peepholes.get_dataloaders(batch_size=3, verbose=True)
+    ph_dl = cv.get_dataloaders(batch_size=3, verbose=True)
     i = 0
     print('\nPrinting some shit')
     for data in ph_dl['train']:
-        print(data['peepholes']['classifier.0'])
+        print(data['coreVectors']['classifier.0'])
         i += 1
         if i == 3: break
