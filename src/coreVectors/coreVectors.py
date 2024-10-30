@@ -26,7 +26,7 @@ class CoreVectors():
         self._loaders = None
 
         # computed in get_coreVec_dataset()
-        self._corevds = None
+        self._corevds = {}
         self._n_samples = None
         self._file_paths = None
         

@@ -1,10 +1,12 @@
 import numpy as np
-
+from tempfile import mkdtemp
+import os.path as path
 import enum
 import copy
 from bisect import bisect_left
 import warnings
 import platform
+import faiss
 import falconn
 
 import torch
@@ -29,7 +31,7 @@ class NearestNeighbor:
         if self._BACKEND is NearestNeighbor.BACKEND.FALCONN:
             self._init_falconn(dimension, number_bits, nb_tables)
         elif self._BACKEND is NearestNeighbor.BACKEND.FAISS:
-            self._init_faiss(dimension)
+            self._init_faiss(dimension,number_bits)
         else:
             raise NotImplementedError
 
@@ -55,9 +57,11 @@ class NearestNeighbor:
         self._falconn_query_object = None
         self._FALCONN_NB_TABLES = nb_tables
 
-    def _init_faiss(self, dimension):
-        res = faiss.StandardGpuResources()
-        self._faiss_index = faiss.GpuIndexFlatL2(res, dimension)
+    def _init_faiss(self, dimension, number_bits):
+        # res = faiss.StandardGpuResources()
+        # self._faiss_index = faiss.GpuIndexFlatL2(res, dimension)
+        self._faiss_index = faiss.IndexLSH(dimension, number_bits)
+
 
     def add(self, x):
         if self._BACKEND is NearestNeighbor.BACKEND.FALCONN:
@@ -83,7 +87,7 @@ class NearestNeighbor:
             self._falconn_query_object = self._falconn_table.construct_query_object()
             self._falconn_query_object.set_num_probes(self._FALCONN_NB_TABLES)
 
-        missing_indices = np.zeros(output.shape, dtype=np.bool)
+        missing_indices = np.zeros(output.shape, dtype=bool)
 
         for i in range(x.shape[0]):
             query_res = self._falconn_query_object.find_k_nearest_neighbors(x[i], self._NEIGHBORS)
@@ -105,27 +109,8 @@ class NearestNeighbor:
 
         output.reshape(-1)[np.logical_not(missing_indices.flatten())] = d1[np.logical_not(missing_indices.flatten())]
 
-        return missing_indices
-
-def get_act_from_ds(_dl, model):
-    """
-    Extract the activations specific for a set of layer and the labels for a specific dataset
-    """
-    if _dl.batch_size != len(_dl.dataset):
-        raise ValueError("Set DataLoader batch_size equal to the length of the dataset")
+        return missing_indices    
         
-    activations = {}
-    for data in _dl:
-        labels = data['label'].detach().cpu().numpy().astype(int)
-        for key,layer in model._target_layers.items():
-            if isinstance(layer, torch.nn.Linear):
-                activations[key] = data['in_activations'][key].detach().cpu().numpy()
-            if isinstance(layer, torch.nn.Conv2d):
-                flatten_act = data['in_activations'][key].flatten(start_dim=1)
-                activations[key] = flatten_act.detach().cpu().numpy()
-    
-    return activations, labels 
-    
 class DkNN:
    
     def __init__(self, **kwargs):
@@ -138,7 +123,8 @@ class DkNN:
         :param trainloader: data loader for the training data
         :param nearest_neighbor_backend: falconn or faiss to be used for LSH
         :param nb_tables: number of tables used by FALCONN to perform locality-sensitive hashing.
-        :param number_bits: number of hash bits used by LSH.
+        :param number_bits: number of ha1.26.4          py311h24aa872_0  
+numpy-base                1.26.4 sh bits used by LSH.
         """
         print('---------- DkNN init')
         print()
@@ -146,8 +132,9 @@ class DkNN:
         self.model = kwargs['model']
         self.nb_classes = kwargs['nb_classes']
         self.neighbors = kwargs['neighbors']
-        self.ph_dl = kwargs['ph_dl']
+        self.cv_dl = kwargs['cv_dl']
         self.percentage = kwargs['percentage']
+        self.device = kwargs['device']
         self.seed = kwargs['seed']
         self.verbose = kwargs['verbose']
         self.path = Path(kwargs['path'])
@@ -161,76 +148,91 @@ class DkNN:
         self.res = TensorDict()
 
         layers = list(self.model._target_layers.keys()) 
+        pt = self.percentage['train']
+        pv = self.percentage['val']
 
-        self.dknn_path = self.path/Path(f'{layers}/train_{self.percentage['train']}/val_{self.percentage['val']}')
+        self.dknn_path = self.path/Path(f'{layers}/nb_tables_{self.nb_tables}/neighbor_{self.neighbors}/train_{pt}/val_{pv}')
         self.name = Path(self.name)
 
         if self.dknn_path.exists():
             if self.verbose: print(f'File {self.dknn_path} exists.')
-            for ds_key in self.ph_dl:
+            for ds_key in self.cv_dl:
                 self.res[ds_key] = TensorDict.load_memmap(self.dknn_path/ds_key)
         else:
             if self.verbose: print(f'File {self.dknn_path} does not exists. Initializing class DkNN')
             self.dknn_path.mkdir(parents=True, exist_ok=True)
             portion = 'train'
-            activations, labels = get_act_from_ds(_dl=self.ph_dl[portion], model=self.model)
-    
-            n_samples = len(labels)
-            idx = np.arange(0, n_samples)
-            rng = np.random.default_rng(self.seed)
-            idx_rand = []
             
-            for l in np.arange(0,self.nb_classes):
-                idx_l = np.argwhere(labels==l)
-                n_samples_l = len(idx_l)
-                num_elements_to_select = int(n_samples_l*(self.percentage[portion]/100))
-                rng.shuffle(idx_l)
-                idx_rand.append(idx_l[:num_elements_to_select])
-            
-            idx_rand = np.concatenate(idx_rand)
-            
-            self.train_activations = {key: value[idx_rand[:,0]] for key, value in activations.items()}
-            self.train_labels = labels[idx_rand[:,0]]
-            
-            # Build locality-sensitive hashing tables for training representations
-            self.train_activations_lsh = copy.copy(self.train_activations)
-            self.init_lsh()
+            print('inizio labels')
 
-    def init_lsh(self):
+            self.train_labels = self.cv_dl['train'].dataset['label']
+            n_samples = len(self.train_labels)
+            
+            if self.percentage[portion] != 100:
+        
+                idx = np.arange(0, n_samples)
+                rng = np.random.default_rng(self.seed)
+                idx_rand = []
+                
+                for l in np.arange(0,self.nb_classes):
+                    idx_l = np.argwhere(self.train_labels.numpy().astype(int)==l)
+                    n_samples_l = len(idx_l)
+                    num_elements_to_select = int(n_samples_l*(self.percentage[portion]/100))
+                    rng.shuffle(idx_l)
+                    idx_rand.append(idx_l[:num_elements_to_select])
+                
+                idx_rand = np.concatenate(idx_rand)
+                
+                self.train_labels = self.train_labels[idx_rand[:,0]]
+                
+            print("## Constructing the NearestNeighbor tables")
+            self.query_objects = {} 
+            self.centers = {}
+            for layer in self.model._target_layers:
+                filename = path.join(mkdtemp(), 'newfile.dat')
+                filename = path.join(mkdtemp(), 'newfile.dat')
+                act = np.memmap(filename, dtype='float32', mode='w+', shape=self.cv_dl['train'].dataset['in_activations'][layer].flatten(start_dim=1).shape)
+                act[:] = self.cv_dl['train'].dataset['in_activations'][layer].flatten(start_dim=1)[:]
+                
+                # activations = self.cv_dl['train'].dataset['in_activations'][layer].flatten(start_dim=1).detach().cpu().numpy()
+                if self.percentage[portion] != 100:
+                    act = act[idx_rand[:,0]]
+                    print(act.shape)
+                
+                # Build locality-sensitive hashing tables for training representations
+                # train_activations_lsh = copy.copy(activations)
+                 # mean of training data representation per layer (that needs to be substracted before NearestNeighbor)
+                
+                self.init_lsh(layer, act)
+            
+
+    def init_lsh(self, layer, train_activations_lsh):
         """
         Initializes locality-sensitive hashing with FALCONN to find nearest neighbors in training data
         """
-        self.query_objects = {} # contains the object that can be queried to find nearest neighbors at each layer
-        self.centers = {} # mean of training data representation per layer (that needs to be substracted before NearestNeighbor)
+        print("Constructing table for {}".format(layer))
 
-        print("## Constructing the NearestNeighbor tables")
+        # Normalize all the lenghts, since we care about the cosine similarity
+        train_activations_lsh /= np.linalg.norm(train_activations_lsh, axis=1).reshape(-1, 1)
 
-        for layer in self.model._target_layers:
-            print("Constructing table for {}".format(layer))
+        # Center the dataset and the queries: this improves the performance of LSH quite a bit
+        center = np.mean(train_activations_lsh, axis=0)
+        train_activations_lsh -= center
+        self.centers[layer] = center
 
-            # Normalize all the lenghts, since we care about the cosine similarity
-            self.train_activations_lsh[layer] /= np.linalg.norm(self.train_activations_lsh[layer], axis=1).reshape(-1, 1)
+        # Constructing nearest neighbor table
+        self.query_objects[layer] = NearestNeighbor(
+            backend=self.backend,
+            dimension=train_activations_lsh.shape[1],
+            number_bits=self.number_bits,
+            neighbors=self.neighbors,
+            nb_tables=self.nb_tables,
+        )
 
-            # Center the dataset and the queries: this improves the performance of LSH quite a bit
-            center = np.mean(self.train_activations_lsh[layer], axis=0)
-            self.train_activations_lsh[layer] -= center
-            self.centers[layer] = center
-
-            # Constructing nearest neighbor table
-            self.query_objects[layer] = NearestNeighbor(
-                backend=self.backend,
-                dimension=self.train_activations_lsh[layer].shape[1],
-                number_bits=self.number_bits,
-                neighbors=self.neighbors,
-                nb_tables=self.nb_tables,
-            )
-
-            self.query_objects[layer].add(self.train_activations_lsh[layer])
+        self.query_objects[layer].add(train_activations_lsh)
 
         print("done!")
-        print()
-
-
+        print()   
     def calibrate(self, portion='val'):
         """
         Runs the DkNN on holdout data to calibrate the credibility metric
@@ -238,81 +240,92 @@ class DkNN:
         """
         print('---------- DkNN calibrate')
         print()
-
+    
         # Compute calibration data activations
+        self.cali_labels = self.cv_dl[portion].dataset['label']
         
-        activations, cali_labels = get_act_from_ds(_dl=self.ph_dl[portion], model=self.model)
-
-        n_samples = len(cali_labels)
-        idx = np.arange(0, n_samples)
-        rng = np.random.default_rng(self.seed)
-        idx_rand = []
+        n_samples = len(self.cali_labels)
         
-        for l in np.arange(0,self.nb_classes):
-            idx_l = np.argwhere(cali_labels==l)
-            n_samples_l = len(idx_l)
-            num_elements_to_select = int(n_samples_l*(self.percentage[portion]/100))
-            rng.shuffle(idx_l)
-            idx_rand.append(idx_l[:num_elements_to_select])
+        if self.percentage[portion] != 100:
+    
+            idx = np.arange(0, n_samples)
+            rng = np.random.default_rng(self.seed)
+            idx_rand = []
+            
+            for l in np.arange(0,self.nb_classes):
+            
+                idx_l = np.argwhere(self.cali_labels.numpy().astype(int)==l)            
+                n_samples_l = len(idx_l)
+                num_elements_to_select = int(n_samples_l*(self.percentage[portion]/10))            
+                rng.shuffle(idx_l)                
+                idx_rand.append(idx_l[:num_elements_to_select])            
+            
+            idx_rand = np.concatenate(idx_rand,axis=0)
         
-        idx_rand = np.concatenate(idx_rand)
-        
-        self.cali_activations = {key: value[idx_rand[:,0]] for key, value in activations.items()}
-        self.cali_labels = cali_labels[idx_rand[:,0]]
+            self.cali_labels = self.cali_labels[idx_rand[:,0]]
         self.nb_cali = len(self.cali_labels)
-
         print("## Starting calibration of DkNN")
+        knns_ind = {}
+        knns_labels = {}
+        for layer in self.model._target_layers:
+            
+            print(f"## calibration of {layer}")
 
-        cali_knns_ind, cali_knns_labels = self.find_train_knns(self.cali_activations)
-        cali_knns_ind = cali_knns_ind
-        cali_knns_labels = cali_knns_labels
-        assert all([v.shape == (self.nb_cali, self.neighbors) for v in cali_knns_ind.values()])
-        assert all([v.shape == (self.nb_cali, self.neighbors) for v in cali_knns_labels.values()])
+            filename = path.join(mkdtemp(), 'newfile.dat')
+            act = np.memmap(filename, dtype='float32', mode='w+', shape=self.cv_dl[portion].dataset['in_activations'][layer].flatten(start_dim=1).shape)
+            act[:] = self.cv_dl[portion].dataset['in_activations'][layer].flatten(start_dim=1).detach().cpu().numpy()[:]
+            
+            if self.percentage[portion] != 100:
+                act = act[idx_rand[:,0]]
+                
+            knns_ind[layer], knns_labels[layer] = self.find_train_knns(act, layer)
 
-        cali_knns_not_in_class = self.nonconformity(cali_knns_labels)
+        
+        assert all([v.shape == (self.nb_cali, self.neighbors) for v in knns_ind.values()])
+        assert all([v.shape == (self.nb_cali, self.neighbors) for v in knns_labels.values()])
+    
+        cali_knns_not_in_class = self.nonconformity(knns_labels)
         cali_knns_not_in_l = np.zeros(self.nb_cali, dtype=np.int32)
         
         for i in range(self.nb_cali):
-            cali_knns_not_in_l[i] = cali_knns_not_in_class[i, self.cali_labels[i]]
-
+            cali_knns_not_in_l[i] = cali_knns_not_in_class[i, self.cali_labels[i].numpy().astype(int)]
+    
         cali_knns_not_in_l_sorted = np.sort(cali_knns_not_in_l)
         self.cali_nonconformity = np.trim_zeros(cali_knns_not_in_l_sorted, trim='f')
         self.nb_cali = self.cali_nonconformity.shape[0]
         self.calibrated = True
-
-    def find_train_knns(self, data_activations):
+    
+    def find_train_knns(self, data_activations, layer):
         """
         Given a data_activation dictionary that contains a np array with activations for each layer,
         find the knns in the training data
         """
-        knns_ind = {}
-        knns_labels = {}
-        
-        for layer in self.model._target_layers:
-            # Pre-process representations of data to normalize and remove training data mean
-            data_activations_layer = copy.copy(data_activations[layer])
-            nb_data = data_activations_layer.shape[0]
-            data_activations_layer /= np.linalg.norm(data_activations_layer, axis=1).reshape(-1, 1)
-            data_activations_layer -= self.centers[layer]
+            
+        # Pre-process representations of data to normalize and remove training data mean
+       
+        nb_data = data_activations.shape[0]
+        data_activations /= np.linalg.norm(data_activations, axis=1).reshape(-1, 1)
+        data_activations -= self.centers[layer]
 
-            # Use FALCONN to find indices of nearest neighbors in training data
-            knns_ind[layer] = np.zeros((data_activations_layer.shape[0], self.neighbors), dtype=np.int32)
-            knn_errors = 0
+        # Use FALCONN to find indices of nearest neighbors in training data
+        knns_ind = np.zeros((data_activations.shape[0], self.neighbors), dtype=np.int32)
+        knn_errors = 0
+        print('starting finding knn')
 
-            knn_missing_indices = self.query_objects[layer].find_knns(data_activations_layer, knns_ind[layer])
-            knn_errors += knn_missing_indices.flatten().sum()
+        knn_missing_indices = self.query_objects[layer].find_knns(data_activations, knns_ind)
+        knn_errors += knn_missing_indices.flatten().sum()
 
-            # Find labels of neighbors found in the training data
-            knns_labels[layer] = np.zeros((nb_data, self.neighbors), dtype=np.int32)
+        # Find labels of neighbors found in the training data
+        knns_labels = np.zeros((nb_data, self.neighbors), dtype=np.int32)
 
-            knns_labels[layer].reshape(-1)[
-                np.logical_not(knn_missing_indices.flatten())
-            ] = self.train_labels[
-                knns_ind[layer].reshape(-1)[np.logical_not(knn_missing_indices.flatten())]                    
-            ]
+        knns_labels.reshape(-1)[
+            np.logical_not(knn_missing_indices.flatten())
+        ] = self.train_labels[
+            knns_ind.reshape(-1)[np.logical_not(knn_missing_indices.flatten())]                    
+        ]
 
         return knns_ind, knns_labels
-
+    
     def nonconformity(self, knns_labels):
         """
         Given an dictionary of nb_data x nb_classes dimension, compute the nonconformity of
@@ -321,20 +334,20 @@ class DkNN:
         """
         nb_data = knns_labels[list(self.model._target_layers)[0]].shape[0]
         knns_not_in_class = np.zeros((nb_data, self.nb_classes), dtype=np.int32)
-
+    
         for i in range(nb_data):
             # Compute number of nearest neighbors per class
             knns_in_class = np.zeros((len(self.model._target_layers), self.nb_classes), dtype=np.int32)
-
+    
             for layer_id, layer in enumerate(self.model._target_layers):
                 knns_in_class[layer_id, :] = np.bincount(knns_labels[layer][i], minlength=self.nb_classes)
-
+    
             # Compute number of knns in other class than class_id
             for class_id in range(self.nb_classes):
                 knns_not_in_class[i, class_id] = np.sum(knns_in_class) - np.sum(knns_in_class[:, class_id])
-
+    
         return knns_not_in_class
-
+        
     def fprop(self, portion):
         """
         Performs a forward pass through the DkNN on an numpy array of data
@@ -346,73 +359,95 @@ class DkNN:
             
         if portion == 'all':
 
-            for ds_key in self.ph_dl:
-                if self.verbose: print(f'\n ---- Getting scores for {ds_key}\n')
-                    
-                data_activations, test_labels = get_act_from_ds(_dl=self.ph_dl[ds_key], model=self.model)
-                _, knns_labels = self.find_train_knns(data_activations)
-        
-                # Calculate nonconformity
-                knns_not_in_class = self.nonconformity(knns_labels)
-                print('Nonconformity calculated')
+            for ds_key in self.cv_dl:
                 
-                n_samples = len(test_labels)
-        
-                # Create predictions, confidence and credibility
-                preds_knn, confs, creds, p_value = self.preds_conf_cred(knns_not_in_class)
-
+                bs = self.cv_dl[ds_key].batch_size
+                n_samples = len(self.cv_dl[ds_key].dataset)
                 score = TensorDict(batch_size=n_samples)
-
+                
                 score['preds_knn'] = MMT.empty(shape=torch.Size((n_samples,)))
                 score['confs'] = MMT.empty(shape=torch.Size((n_samples,)))
                 score['creds'] = MMT.empty(shape=torch.Size((n_samples,)))
                 score['p-value'] = MMT.empty(shape=torch.Size((n_samples,)+(self.nb_classes,)))
+                # _dl = DataLoader(self.cv_dl[ds_key].dataset['in_activations'], batch_size=64, collate_fn = lambda x: x, shuffle=False)
+
+                if self.verbose: print(f'\n ---- Getting scores for {ds_key}\n')
+               
+                # for i in range(n_samples):
+                    
+                knns_labels = {}
+                         
+                for layer in self.model._target_layers:
+                    
+                    filename = path.join(mkdtemp(), 'newfile.dat')
+                    act = np.memmap(filename, dtype='float32', mode='w+', shape=self.cv_dl[ds_key].dataset['in_activations'][layer].flatten(start_dim=1).shape)
+                    print(f'start finding_knns for {layer}')
+                    act[:] = self.cv_dl[ds_key].dataset['in_activations'][layer].flatten(start_dim=1).detach().cpu().numpy()[:]
+                    
+                    _, knns_labels[layer] = self.find_train_knns(act, layer)
+        
+                # Calculate nonconformity
+                knns_not_in_class = self.nonconformity(knns_labels)
+        
+                # Create predictions, confidence and credibility
+                preds_knn, confs, creds, p_value = self.preds_conf_cred(knns_not_in_class)
                 
-                score['preds_knn'] = preds_knn
-                score['confs'] = confs
-                score['creds'] = creds
-                score['p-value'] = p_value
+                score['preds_knn'] = torch.Tensor(preds_knn)
+                score['confs'] = torch.Tensor(confs)
+                score['creds'] = torch.Tensor(creds)
+                score['p-value'] = torch.Tensor(p_value)
+                                    
                 file_path = self.dknn_path/(ds_key)
                 n_threads = 32
                 if self.verbose: print(f'Saving {ds_key} to {file_path}.')
                 score.memmap(file_path, num_threads=n_threads)
                 self.res[ds_key] = score
-                
-        else:   
+        
+        else:
             
-            data_activations, test_labels = get_act_from_ds(_dl=self.ph_dl[portion], model=self.model)
-
+            labels = self.cv_dl[portion].dataset['label']
+        
+            n_samples = len(labels)
+            
             if self.percentage[portion] != 100:
-                
-                n_samples = len(test_labels)
+        
                 idx = np.arange(0, n_samples)
                 rng = np.random.default_rng(self.seed)
                 idx_rand = []
                 
                 for l in np.arange(0,self.nb_classes):
-                    idx_l = np.argwhere(test_labels==l)
+                
+                    idx_l = np.argwhere(labels.numpy().astype(int)==l)            
                     n_samples_l = len(idx_l)
-                    num_elements_to_select = int(n_samples_l*(self.percentage[portion]/100))
-                    rng.shuffle(idx_l)
-                    idx_rand.append(idx_l[:num_elements_to_select])
+                    num_elements_to_select = int(n_samples_l*(self.percentage[portion]/100))            
+                    rng.shuffle(idx_l)                
+                    idx_rand.append(idx_l[:num_elements_to_select])            
                 
-                idx_rand = np.concatenate(idx_rand)
+                idx_rand = np.concatenate(idx_rand,axis=0)
+            
+                labels = labels[idx_rand[:,0]]
+            
+            knns_labels = {}
+            for layer in self.model._target_layers:
                 
-                data_activations = {key: value[idx_rand[:,0]] for key, value in data_activations.items()}
-                test_labels = test_labels[idx_rand[:,0]]
+                filename = path.join(mkdtemp(), 'newfile.dat')
+                act = np.memmap(filename, dtype='float32', mode='w+', shape=self.cv_dl[portion].dataset['in_activations'][layer].flatten(start_dim=1).shape)
+                act[:] = self.cv_dl[portion].dataset['in_activations'][layer].flatten(start_dim=1).detach().cpu().numpy()[:]
+                
+                if self.percentage[portion] != 100:
+                    act = act[idx_rand[:,0]]
 
-            _, knns_labels = self.find_train_knns(data_activations)
+                _, knns_labels[layer] = self.find_train_knns(act, layer)
     
-            # Calculate nonconformity
-            knns_not_in_class = self.nonconformity(knns_labels)
-            print('Nonconformity calculated')
+            #Calculate nonconformity
+            knns_not_in_class = self.nonconformity(knns_labels)      
     
             # Create predictions, confidence and credibility
             preds_knn, confs, creds, p_value = self.preds_conf_cred(knns_not_in_class)
-            print('Predictions created')
     
-            return preds_knn, confs, creds, p_value, test_labels 
+            return preds_knn, confs, creds, p_value 
 
+        
     def preds_conf_cred(self, knns_not_in_class):
         """
         Given an array of nb_data x nb_classes dimensions, use conformal prediction to compute
@@ -437,3 +472,4 @@ class DkNN:
             creds[i] = np.max(p_value[i])
 
         return preds_knn, confs, creds, p_value
+        

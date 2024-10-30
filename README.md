@@ -19,7 +19,7 @@ conda env update --file local.yml --prune
 
 ## Deep K-NN
 
-Install FALCONN outside our repo. We will need to update the `pybind11` library used in `faconn` since their version is outdated.
+Install FALCONN outside our repo. We will need to update the `pybind11` library used in `falconn` since their version is outdated.
 ```sh
     cd <somewhere you like>
     git clone https://github.com/FALCONN-LIB/FALCONN
