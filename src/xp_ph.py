@@ -154,13 +154,16 @@ if __name__ == "__main__":
             path = phs_path,
             name = phs_name,
             classifier = cls,
+            layer = 'classifier.0',
             )
 
     ph.get_peepholes(
             loaders = cv_dl,
-            layer = 'classifier.0',
             verbose = True
             )
+
+    ph.get_scores(verbose=True)
+
     i = 0
     print('\nPrinting some peeps')
     ph_dl = ph.get_dataloaders(verbose=True)
