@@ -8,7 +8,7 @@ from tensordict import MemoryMappedTensor as MMT
 from torch.utils.data import DataLoader
 
 def get_activations(self, **kwargs):
-    model = kwargs['model'] 
+    model = self._model
     device = model.device 
     hooks = model.get_hooks()
 
@@ -101,13 +101,14 @@ def get_activations(self, **kwargs):
             if not has_pred:
                 predicted_labels = y_predicted.argmax(axis = 1).detach().cpu()
                 results = predicted_labels == data['label']
-                self._corevds[ds_key][bn*bs:bn*bs+n_in] = {'pred':predicted_labels, 'result':results}
+                self._corevds[ds_key]['pred'][bn*bs:bn*bs+n_in] = predicted_labels
+                self._corevds[ds_key]['result'][bn*bs:bn*bs+n_in] = results
             
             for lk in _layers_to_save:
                 if model._si:
-                    self._corevds[ds_key][bn*bs:bn*bs+n_in] = {'in_activations': {lk: hooks[lk].in_activations}}
+                    self._corevds[ds_key]['in_activations'][lk][bn*bs:bn*bs+n_in] = hooks[lk].in_activations
                 if model._so:
-                    self._corevds[ds_key][bn*bs:bn*bs+n_in] = {'out_activations': {lk: hooks[lk].out_activations}}
+                    self._corevds[ds_key]['out_activations'][lk][bn*bs:bn*bs+n_in] = hooks[lk].out_activations
 
     return 
 

@@ -1,7 +1,7 @@
 from pathlib import Path as Path
 from datasets.dummy import Dummy
 from models.dummy_model import DummyModel
-from models.dummy_wrap import DummyWrap
+from models.model_wrap import ModelWrap 
 #from activations.activations import Activations
 #from peepholes.peepholes import Peepholes
 
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     for p in nn.parameters():
         print('nn parameters: ', p)
     
-    dummy = DummyWrap()
+    dummy = ModelWrap()
     dummy.set_model(
         model=nn,
         path=model_dir,

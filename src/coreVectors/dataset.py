@@ -50,7 +50,8 @@ def get_coreVec_dataset(self, **kwargs):
             for bn, data in enumerate(tqdm(loaders[loader_name])): 
                 images, labels = data
                 n_in = len(images)
-                _corevds[loader_name][bn*bs:bn*bs+n_in] = {'image':images, 'label':labels}
+                _corevds[loader_name]['image'][bn*bs:bn*bs+n_in] = images
+                _corevds[loader_name]['label'][bn*bs:bn*bs+n_in] = labels
         
         _n_samples[loader_name] = n_samples
     

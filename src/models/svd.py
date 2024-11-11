@@ -66,12 +66,10 @@ def c2s(input_shape, weight, bias, stride=(1, 1), padding=(0, 0), dilation=(1,1)
     csr_mat = torch.sparse_csr_tensor(crow, cols, data, size=shape_out, device=device)
     return csr_mat 
 
-#TODO: clean the model as parameter since the function is inside the model
 def get_svds(self, **kwargs):
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False
     path = Path(kwargs['path'])
     name = Path(kwargs['name'])
-    model = kwargs['model']
 
     # create folder
     path.mkdir(parents=True, exist_ok=True)
@@ -84,7 +82,7 @@ def get_svds(self, **kwargs):
         _svds = TensorDict()
 
     _layers_to_compute = []
-    for lk in model._target_layers:
+    for lk in self._target_layers:
         if lk in _svds.keys():
             continue
         _layers_to_compute.append(lk)
@@ -92,14 +90,14 @@ def get_svds(self, **kwargs):
     
     for lk in _layers_to_compute:
         if verbose: print(f'\n ---- Getting SVDs for {lk}\n')
-        layer = model._target_layers[lk]
+        layer = self._target_layers[lk]
         weight = layer.weight 
         bias = layer.bias 
 
         if verbose: print('layer: ', layer)
         if isinstance(layer, torch.nn.Conv2d):
             print('conv layer')
-            in_shape = model._hooks[lk].in_shape
+            in_shape = self._hooks[lk].in_shape
             
             # Apply padding
             stride = layer.stride 

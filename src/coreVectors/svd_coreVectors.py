@@ -13,8 +13,9 @@ def reduct_matrices_from_svds(svd, lk):
     return svd[lk]['Vh']
 
 def get_coreVectors(self, **kwargs):
-    model = kwargs['model']
+    model = self._model 
     device = model.device 
+    normalize_wrt = kwargs['normalize_wrt'] if 'normalize_wrt' in kwargs else None 
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False
     n_threads = kwargs['n_threads'] if 'n_threads' in kwargs else 32
 
@@ -52,6 +53,7 @@ def get_coreVectors(self, **kwargs):
                 corev_size = reduct_m.shape[0] 
                 _td['coreVectors'][lk] = MMT.empty(shape=torch.Size((n_samples,)+(corev_size,)))
                 _layers_to_save.append(lk)
+
         if verbose: print('Layers to save: ', _layers_to_save)
         if len(_layers_to_save) == 0:
             self._corevds[ds_key].lock_()
@@ -85,7 +87,7 @@ def get_coreVectors(self, **kwargs):
                     ones = torch.ones(n_act, 1)
                     _acts = torch.hstack((acts_flat, ones)).to(device)
                     phs = (reduct_m@_acts.T).T
-                    self._corevds[ds_key][bn*bs:bn*bs+n_act] = {'coreVectors': {lk: phs}}
+                    self._corevds[ds_key]['coreVectors'][lk][bn*bs:bn*bs+n_act] = phs
             if isinstance(layer, torch.nn.Conv2d):
                 pad_mode = layer.padding_mode if layer.padding_mode != 'zeros' else 'constant'
                 padding = _reverse_repeat_tuple(layer.padding, 2) 
@@ -98,6 +100,6 @@ def get_coreVectors(self, **kwargs):
                     ones = torch.ones(n_act, 1)
                     _acts = torch.hstack((acts_flat, ones)).to(device)
                     phs = (reduct_m@_acts.T).T
-                    self._corevds[ds_key][bn*bs:bn*bs+n_act] = {'coreVectors': {lk: phs}}
+                    self._corevds[ds_key]['coreVectors'][lk][bn*bs:bn*bs+n_act] = phs
 
     return        
