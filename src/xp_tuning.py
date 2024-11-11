@@ -69,16 +69,16 @@ def peephole_wrap(config, **kwargs):
             path = ph_path,
             name = ph_name+f'.{peep_size}.{n_cls}.{n_init}.{max_iter}.{score_type}',
             classifier = cls,
+            layer = target_layer,
             )
                                                                      
     ph.get_peepholes(
             loaders = cv_dl,
-            layer = target_layer,
             verbose = True
             )
+    ph.get_scores(verbose=True)
                                                                      
     cok, cko = ph.evaluate(
-            layer = target_layer,
             score_type = score_type,
             coreVectors = cv_dl
             )
@@ -97,7 +97,6 @@ def peephole_wrap(config, **kwargs):
         )
 
     return 
-
 
 if __name__ == "__main__":
     use_cuda = torch.cuda.is_available()
@@ -156,8 +155,8 @@ if __name__ == "__main__":
     #--------------------------------
 
     config = {
-            'peep_size': tune.choice([2**i for i in range(2, 3)]),
-            'n_classifier': tune.choice([2**i for i in range(2, 3)]),
+            'peep_size': tune.choice([2**i for i in range(2, 9)]),
+            'n_classifier': tune.choice([2**i for i in range(2, 9)]),
             'n_init': tune.choice([50*i for i in range(1, 3)]),
             'max_iter': tune.choice([100*i for i in range(3, 4)]),
             'score_type': tune.choice(['max', 'entropy']), 
@@ -166,7 +165,7 @@ if __name__ == "__main__":
     if device == 'cpu':
         resources = {"cpu": 1}
     else:
-        resources = {"cpu": 16, "gpu": 3}
+        resources = {"cpu": 16, "gpu": 2}
 
     hyper_params_file = phs_path/f'hyperparams.pickle'
     if hyper_params_file.exists():
@@ -179,28 +178,29 @@ if __name__ == "__main__":
             )
     algo = ConcurrencyLimiter(searcher, max_concurrent=4)
     scheduler = AsyncHyperBandScheduler(grace_period=5, max_t=100, metric="cok", mode="max") 
-    tune_storage_path = Path.cwd()/'../data/tunning'
+    tune_storage_path = Path.cwd()/'../data/tuning'
     trainable = tune.with_resources(
             partial(
                 peephole_wrap,
-                device=device,
+                device = device,
                 corevec_dataloader = cv_dl,
                 ph_path = phs_path,
                 ph_name = phs_name
                 ),
             resources 
             )
+
     tuner = tune.Tuner(
             trainable,
-            tune_config=tune.TuneConfig(
-                search_alg=algo,
-                num_samples=1, 
-                scheduler=scheduler,
+            tune_config = tune.TuneConfig(
+                search_alg = algo,
+                num_samples = 10, 
+                scheduler = scheduler,
                 ),
-            run_config=train.RunConfig(
-                storage_path=tune_storage_path
+            run_config = train.RunConfig(
+                storage_path = tune_storage_path
                 ),
-            param_space=config,
+            param_space = config,
             )
     result = tuner.fit()
 

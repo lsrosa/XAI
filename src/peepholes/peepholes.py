@@ -154,7 +154,7 @@ class Peepholes:
         return
 
     def evaluate(self, **kwargs): 
-        layer = kwargs['layer']
+        layer = self.layer 
         cvs = kwargs['coreVectors']
         score_type = kwargs['score_type']
         self._classifier.nl_class
