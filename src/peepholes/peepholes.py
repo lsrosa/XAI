@@ -79,7 +79,7 @@ class Peepholes:
                 # computing peepholes
                 #-----------------------------------------
                 if verbose: print('\n ---- computing peepholes \n')
-                for bn, batch in enumerate(tqdm(_dls[loader_name])):
+                for bn, batch in enumerate(tqdm(_dls[loader_name], disable=not verbose)):
                     n_in = len(batch)
                     cp = self._classifier.classifier_probabilities(batch=batch, verbose=verbose)
                     # print('cp %d: '%bn, cp)
@@ -152,13 +152,27 @@ class Peepholes:
                 self._phs[loader_name][layer]['score_entropy'][bn*bs:bn*bs+n_in] = torch.sum(peepholes * torch.log(peepholes + 1e-12), dim=1)
     
         return
+    
+    def load_only(self, **kwargs):
+        verbose = kwargs['verbose'] if 'verbose' in kwargs else False
+        loaders = kwargs['loaders']
+        _phs = {} 
+
+        for loader_name in loaders:
+            if verbose: print(f'\n ---- Getting peepholes for {loader_name}\n')
+            file_path = self.path/(self.name.name+'.'+loader_name)
+           
+            if verbose: print(f'File {file_path} exists. Loading from disk.')
+            _phs[loader_name] = TensorDict.load_memmap(file_path)
+            _phs[loader_name].lock_()
+        
+        self._phs = _phs
+        return
 
     def evaluate(self, **kwargs): 
         layer = self.layer 
         cvs = kwargs['coreVectors']
         score_type = kwargs['score_type']
-        self._classifier.nl_class
-        self._classifier.nl_model
 
         quantiles = torch.arange(0, 1, 0.001) # setting quantiles list
         prob_train = self._phs['train'][layer]['peepholes']
@@ -194,7 +208,9 @@ class Peepholes:
         plt.legend()
         plt.savefig((self.path/self.name).as_posix()+'.png')
         plt.close()
-
+        
+        # TODO: make dist to diagonal
+        # TODO: save and load evaluation scores
         return np.linalg.norm(y1-y2), np.linalg.norm(y1-y2)
 
     def get_dataloaders(self, **kwargs):

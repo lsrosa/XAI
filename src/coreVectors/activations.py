@@ -91,7 +91,7 @@ def get_activations(self, **kwargs):
         _dl = DataLoader(self._corevds[ds_key], batch_size=bs, collate_fn = lambda x: x, shuffle=False) 
         
         if verbose: print('Computing activations')
-        for bn, data in enumerate(tqdm(_dl)):
+        for bn, data in enumerate(tqdm(_dl, disable=not verbose)):
             n_in = data['image'].shape[0]
             imgs = data['image'].contiguous().to(device)
             with torch.no_grad():

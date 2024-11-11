@@ -47,7 +47,7 @@ def get_coreVec_dataset(self, **kwargs):
             _corevds[loader_name] = _td.memmap_like(file_path, num_threads=n_threads)
 
             if verbose: print('Copying images and labels')
-            for bn, data in enumerate(tqdm(loaders[loader_name])): 
+            for bn, data in enumerate(tqdm(loaders[loader_name], disable=not verbose)): 
                 images, labels = data
                 n_in = len(images)
                 _corevds[loader_name]['image'][bn*bs:bn*bs+n_in] = images

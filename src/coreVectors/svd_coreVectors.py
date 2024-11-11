@@ -80,7 +80,7 @@ def get_coreVectors(self, **kwargs):
             
             layer = model._target_layers[lk]
             if isinstance(layer, torch.nn.Linear):
-                for bn, data in enumerate(tqdm(_dl)):
+                for bn, data in enumerate(tqdm(_dl, disable=not verbose)):
                     n_act = data['in_activations'][lk].shape[0]
                     acts = data['in_activations'][lk].contiguous()
                     acts_flat = acts.flatten(start_dim=1)
@@ -91,7 +91,7 @@ def get_coreVectors(self, **kwargs):
             if isinstance(layer, torch.nn.Conv2d):
                 pad_mode = layer.padding_mode if layer.padding_mode != 'zeros' else 'constant'
                 padding = _reverse_repeat_tuple(layer.padding, 2) 
-                for bn, data in enumerate(tqdm(_dl)):
+                for bn, data in enumerate(tqdm(_dl, disable=not verbose)):
                     n_act = data['in_activations'][lk].shape[0]
                     acts = data['in_activations'][lk].contiguous()
                     acts_pad = pad(acts, pad=padding, mode=pad_mode)

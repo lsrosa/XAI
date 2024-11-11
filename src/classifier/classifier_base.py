@@ -74,7 +74,7 @@ class ClassifierBase: # quella buona
 
         # iterate over _fit_data
         if verbose: print('Computing empirical posterios')
-        for batch in tqdm(self._fit_dl):
+        for batch in tqdm(self._fit_dl, disable=not verbose):
             data = self.parser(data=batch, **self.parser_kwargs)
             preds = self._classifier.predict(data)
             labels = batch['label']

@@ -1,6 +1,3 @@
-# python stuff
-from tqdm import tqdm
-
 # our stuff
 from classifier.classifier_base import ClassifierBase
 

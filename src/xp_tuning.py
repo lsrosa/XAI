@@ -54,30 +54,48 @@ def peephole_wrap(config, **kwargs):
     target_layer = 'classifier.0' 
     parser_kwargs = {'layer': target_layer, 'peep_size':peep_size}
     cls_kwargs = {'n_init':n_init, 'max_iter':max_iter} 
-    cls = KMeans(
-            nl_classifier = n_cls,
-            nl_model = n_classes,
-            parser = parser_cv,
-            parser_kwargs = parser_kwargs,
-            cls_kwargs = cls_kwargs
-            )
+    ph_config_name = ph_name+f'.{peep_size}.{n_cls}.{n_init}.{max_iter}.{score_type}'
+
+    g = list(ph_path.glob(f'{ph_config_name}.*')) 
+    if len(g) > 0:
+        print('Already run this configuration, skipping KMeans')
+        ph = Peepholes(
+                path = ph_path,
+                name = ph_config_name,
+                classifier = None,
+                layer = target_layer,
+                )
+        
+        ph.load_only(
+                loaders = ['train', 'test', 'val'],
+                verbose = True
+                )
+    else:
+        cls = KMeans(
+                nl_classifier = n_cls,
+                nl_model = n_classes,
+                parser = parser_cv,
+                parser_kwargs = parser_kwargs,
+                cls_kwargs = cls_kwargs
+                )
+                                                                         
+        cls.fit(dataloader = cv_dl['train'], verbose=True)
+        cls.compute_empirical_posteriors(verbose=True)
                                                                      
-    cls.fit(dataloader = cv_dl['train'], verbose=True)
-    cls.compute_empirical_posteriors(verbose=True)
-                                                                     
-    ph = Peepholes(
-            path = ph_path,
-            name = ph_name+f'.{peep_size}.{n_cls}.{n_init}.{max_iter}.{score_type}',
-            classifier = cls,
-            layer = target_layer,
-            )
-                                                                     
-    ph.get_peepholes(
-            loaders = cv_dl,
-            verbose = True
-            )
-    ph.get_scores(verbose=True)
-                                                                     
+        ph = Peepholes(
+                path = ph_path,
+                name = ph_config_name,
+                classifier = cls,
+                layer = target_layer,
+                )
+
+        ph.get_peepholes(
+                loaders = cv_dl,
+                verbose = True
+                )
+    
+        ph.get_scores(verbose=True)
+
     cok, cko = ph.evaluate(
             score_type = score_type,
             coreVectors = cv_dl
@@ -194,7 +212,7 @@ if __name__ == "__main__":
             trainable,
             tune_config = tune.TuneConfig(
                 search_alg = algo,
-                num_samples = 10, 
+                num_samples = 1, 
                 scheduler = scheduler,
                 ),
             run_config = train.RunConfig(

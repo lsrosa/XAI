@@ -80,7 +80,7 @@ class CoreVectors():
             if verbose: print(f'\n ---- Normalizing core vectors for {ds_key}\n')
             td = self._corevds[ds_key]['coreVectors']  
             dl = DataLoader(td, batch_size=bs, collate_fn=lambda x: x)
-            for bn, batch in enumerate(tqdm(dl)):
+            for bn, batch in enumerate(tqdm(dl, disable=not verbose)):
                 n_in = len(batch) 
                 self._corevds[ds_key]['coreVectors'][bn*bs:bn*bs+n_in] = (batch - means)/stds
             is_normed[ds_key] = list(set(layers_to_norm[ds_key]).union(is_normed[ds_key])) 
@@ -128,12 +128,11 @@ class CoreVectors():
             file_path = self.path/(self.name.name+'.'+loader_name)
             _file_paths[loader_name] = file_path
             
-            if file_path.exists():
-                if verbose: print(f'File {file_path} exists. Loading from disk.')
-                _corevds[loader_name] = TensorDict.load_memmap(file_path)
-                _corevds[loader_name].lock_()
-                n_samples = len(_corevds[loader_name])
-                if verbose: print('loaded n_samples: ', n_samples)
+            if verbose: print(f'File {file_path} exists. Loading from disk.')
+            _corevds[loader_name] = TensorDict.load_memmap(file_path)
+            _corevds[loader_name].lock_()
+            n_samples = len(_corevds[loader_name])
+            if verbose: print('loaded n_samples: ', n_samples)
         
         norm_file_path = self.path/(self.name.name+'.normalization')
         if norm_file_path.exists():

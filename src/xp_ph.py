@@ -44,6 +44,8 @@ if __name__ == "__main__":
     
     phs_name = 'peepholes'
     phs_path = Path.cwd()/'../data/peepholes'
+    
+    verbose = True 
 
     #--------------------------------
     # Dataset 
@@ -68,11 +70,11 @@ if __name__ == "__main__":
     n_classes = len(ds.get_classes()) 
     nn.classifier[-1] = torch.nn.Linear(in_features, n_classes)
     model = ModelWrap(device=device)
-    model.set_model(model=nn, path=model_dir, name=model_name, verbose=True)
+    model.set_model(model=nn, path=model_dir, name=model_name, verbose=verbose)
 
     layers_dict = {'classifier': [0, 3],
                    'features': [28]}
-    model.set_target_layers(target_layers=layers_dict, verbose=True)
+    model.set_target_layers(target_layers=layers_dict, verbose=verbose)
 
     direction = {'save_input':True, 'save_output':False}
     model.add_hooks(**direction, verbose=False) 
@@ -85,7 +87,7 @@ if __name__ == "__main__":
     # SVDs 
     #--------------------------------
     print('target layers: ', model.get_target_layers()) 
-    model.get_svds(path=svds_path, name=svds_name, verbose=True)
+    model.get_svds(path=svds_path, name=svds_name, verbose=verbose)
     for k in model._svds.keys():
         for kk in model._svds[k].keys():
             print('svd shapes: ', k, kk, model._svds[k][kk].shape)
@@ -104,21 +106,21 @@ if __name__ == "__main__":
     # copy dataset to coreVect dataset
     cv.get_coreVec_dataset(
             loaders = loaders,
-            verbose = True
+            verbose = verbose
             ) 
 
     cv.get_activations(
-            loaders=loaders,
-            verbose=True
+            loaders = loaders,
+            verbose = verbose
             )
     
     cv.get_coreVectors(
             reduct_matrices = model._svds,
             parser = parser_fn,
-            verbose = True
+            verbose = verbose
             )
     
-    cv_dl = cv.get_dataloaders(verbose=True)
+    cv_dl = cv.get_dataloaders(verbose=verbose)
     i = 0
     print('\nPrinting some corevecs')
     for data in cv_dl['val']:
@@ -126,7 +128,7 @@ if __name__ == "__main__":
         i += 1
         if i == 3: break
 
-    cv.normalize_corevectors(wrt='train', verbose=True)
+    cv.normalize_corevectors(wrt='train', verbose=verbose)
     i = 0
     for data in cv_dl['val']:
         print(data['coreVectors']['classifier.0'])
@@ -147,8 +149,8 @@ if __name__ == "__main__":
             cls_kwargs = cls_kwargs
             )
 
-    cls.fit(dataloader = cv_dl['test'], verbose=True)
-    cls.compute_empirical_posteriors(verbose=True)
+    cls.fit(dataloader = cv_dl['test'], verbose=verbose)
+    cls.compute_empirical_posteriors(verbose=verbose)
 
     ph = Peepholes(
             path = phs_path,
@@ -159,14 +161,14 @@ if __name__ == "__main__":
 
     ph.get_peepholes(
             loaders = cv_dl,
-            verbose = True
+            verbose = verbose
             )
 
-    ph.get_scores(verbose=True)
+    ph.get_scores(verbose=verbose)
 
     i = 0
     print('\nPrinting some peeps')
-    ph_dl = ph.get_dataloaders(verbose=True)
+    ph_dl = ph.get_dataloaders(verbose=verbose)
     for data in ph_dl['val']:
         print(data['classifier.0']['peepholes'])
         print(data['classifier.0']['score_max'])
