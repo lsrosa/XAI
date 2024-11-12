@@ -34,6 +34,7 @@ class ClassifierBase: # quella buona
         self.nl_class = kwargs['nl_classifier']
         self.nl_model = kwargs['nl_model']
         
+        self.device = kwargs['device'] if 'device' in kwargs else 'cpu'
         self.parser = kwargs['parser'] if 'parser' in kwargs else null_parser 
         self.parser_kwargs = kwargs['parser_kwargs'] if 'parser_kwargs' in kwargs and 'parser' in kwargs else dict() 
 

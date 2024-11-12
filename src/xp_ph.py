@@ -1,6 +1,7 @@
 # python stuff
 from pathlib import Path as Path
 from numpy.random import randint
+from time import time
 
 # Our stuff
 from datasets.cifar import Cifar
@@ -10,6 +11,7 @@ from coreVectors.svd_coreVectors import reduct_matrices_from_svds as parser_fn
 from classifier.classifier_base import trim_corevectors
 from classifier.kmeans import KMeans 
 from classifier.gmm import GMM 
+#from classifier.tkmeans import KMeans as tKMeans 
 from peepholes.peepholes import Peepholes
 
 # torch stuff
@@ -46,7 +48,8 @@ if __name__ == "__main__":
     phs_path = Path.cwd()/'../data/peepholes'
     
     verbose = True 
-
+    
+    '''
     #--------------------------------
     # Dataset 
     #--------------------------------
@@ -82,7 +85,7 @@ if __name__ == "__main__":
     dry_img, _ = ds._train_ds.dataset[0]
     dry_img = dry_img.reshape((1,)+dry_img.shape)
     model.dry_run(x=dry_img)
-    
+
     #--------------------------------
     # SVDs 
     #--------------------------------
@@ -134,22 +137,41 @@ if __name__ == "__main__":
         print(data['coreVectors']['classifier.0'])
         i += 1
         if i == 3: break
-
+    '''
     #--------------------------------
     # Peepholes
     #--------------------------------
+    cv = CoreVectors(
+            path = cvs_path,
+            name = cvs_name,
+            model = None 
+            )
+    cv.load_only(
+            loaders = ['train', 'test', 'val'],
+            verbose = True
+            ) 
+    
+    # the corevector batch_size needs to be >= nl_classifier
+    bd = {'train':300, 'test': 300, 'val': 300}
+    cv_dl = cv.get_dataloaders(verbose=True, batch_dict=bd)
+    n_classes = 300
+
     parser_cv = trim_corevectors
-    parser_kwargs = {'layer': 'classifier.0', 'peep_size':20}
-    cls_kwargs = {'random_state': 42, 'n_init':100, 'max_iter':600} 
+    parser_kwargs = {'layer': 'classifier.0', 'peep_size':300}
+    cls_kwargs = {'random_state': 42, 'n_init':100, 'max_iter':600, 'batch_size': 2014} 
     cls = KMeans(
             nl_classifier = 150,
             nl_model = n_classes,
             parser = parser_cv,
             parser_kwargs = parser_kwargs,
-            cls_kwargs = cls_kwargs
+            cls_kwargs = cls_kwargs,
+            device = device
             )
+    
+    t0 = time()
+    cls.fit(dataloader = cv_dl['train'], verbose=verbose)
+    print('Fitting time = ', time()-t0)
 
-    cls.fit(dataloader = cv_dl['test'], verbose=verbose)
     cls.compute_empirical_posteriors(verbose=verbose)
 
     ph = Peepholes(

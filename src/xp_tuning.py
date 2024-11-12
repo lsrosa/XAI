@@ -227,5 +227,4 @@ if __name__ == "__main__":
     results_df.to_pickle(hyper_params_file)
     
     # TODO: use GPU for peephole computations
-    # TODO: check sharing tensor dicts
 

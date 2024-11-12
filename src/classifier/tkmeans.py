@@ -1,6 +1,3 @@
-# python stuff
-from tqdm import tqdm
-
 # our stuff
 from classifier.classifier_base import ClassifierBase
 
@@ -8,15 +5,18 @@ from classifier.classifier_base import ClassifierBase
 import torch
 from torch.utils.data import DataLoader
 
-# sklearn stuff
-from sklearn.cluster import MiniBatchKMeans as sklKMeans
+# torch kmeans
+# from  https://github.com/jokofa/torch_kmeans/tree/master
+from torch_kmeans import KMeans as tKMeans
+
 
 class KMeans(ClassifierBase): # quella buona
     def __init__(self, **kwargs):
         cls_kwargs = kwargs.pop('cls_kwargs') if 'cls_kwargs' in kwargs else {}
         ClassifierBase.__init__(self, **kwargs)
 
-        self._classifier = sklKMeans(n_clusters=self.nl_class, **cls_kwargs)
+        self._classifier = tKMeans(n_clusters=self.nl_class, **cls_kwargs)
+
 
     def fit(self, **kwargs):
         '''
@@ -28,11 +28,20 @@ class KMeans(ClassifierBase): # quella buona
 
         if verbose: 
             print('\n ---- KMeans classifier\n')
+            print('Parsing data')
+
+        print('tkmeans device: ', self.device)
+
+        # temp dataloader for loading the whole dataset
+        _dl = DataLoader(in_dl.dataset, batch_size=len(in_dl.dataset), collate_fn=lambda x: x, shuffle=False) 
+        _data = next(iter(_dl))
+        print('_data shape: ', _data.shape)
+        data = self.parser(data=_data, **self.parser_kwargs)
+        data = data.reshape((1,)+data.shape).to(self.device)
+        print('data shape: ', data.shape)
 
         if verbose: print('Fitting KMeans')
-        for _data in tqdm(in_dl, disable=not verbose):
-            data = self.parser(data=_data, **self.parser_kwargs)
-            self._classifier.partial_fit(data)
+        self._classifier.fit(data)
         
         self._fit_dl = in_dl
         return
