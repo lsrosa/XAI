@@ -157,10 +157,10 @@ if __name__ == "__main__":
     n_classes = 300
 
     parser_cv = trim_corevectors
-    parser_kwargs = {'layer': 'classifier.0', 'peep_size':300}
-    cls_kwargs = {'random_state': 42, 'n_init':100, 'max_iter':600, 'batch_size': 2014} 
-    cls = KMeans(
-            nl_classifier = 150,
+    parser_kwargs = {'layer': 'classifier.0', 'peep_size':30}
+    cls_kwargs = {'random_state': 42, 'n_init':10, 'max_iter':60} 
+    cls = GMM(
+            nl_classifier = 10,
             nl_model = n_classes,
             parser = parser_cv,
             parser_kwargs = parser_kwargs,
@@ -169,7 +169,7 @@ if __name__ == "__main__":
             )
     
     t0 = time()
-    cls.fit(dataloader = cv_dl['train'], verbose=verbose)
+    cls.fit(dataloader = cv_dl['test'], verbose=verbose)
     print('Fitting time = ', time()-t0)
 
     cls.compute_empirical_posteriors(verbose=verbose)
