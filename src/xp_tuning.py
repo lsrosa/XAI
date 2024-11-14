@@ -112,7 +112,7 @@ def peephole_wrap(config, **kwargs):
         checkpoint = Checkpoint.from_directory(checkpoint_dir)
         train.report({
             "cok": cok,
-            'cko': cok,
+            'cko': cko,
             },
             checkpoint=checkpoint
         )
@@ -195,6 +195,7 @@ if __name__ == "__main__":
             metric = ['cok', 'cko'],
             mode = ['max', 'max']
             )
+    
     algo = ConcurrencyLimiter(searcher, max_concurrent=4)
     scheduler = AsyncHyperBandScheduler(grace_period=5, max_t=100, metric="cok", mode="max") 
     tune_storage_path = Path.cwd()/'../data/tuning'

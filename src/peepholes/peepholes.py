@@ -161,8 +161,8 @@ class Peepholes:
             file_path = self.path/(self.name.name+'.'+ds_key)
            
             if verbose: print(f'File {file_path} exists. Loading from disk.')
-            _phs[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r').to(self.device)
-        
+            self._phs[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r').to(self.device)
+            
         return
 
     def evaluate(self, **kwargs): 
@@ -177,7 +177,8 @@ class Peepholes:
         prob_val = self._phs['val'][layer]['peepholes']
         
         # TODO: vectorize
-        conf_t = self._phs['train'][layer]['score_'+score_type].detach().cpu() 
+        # conf_t = self._phs['train'][layer]['score_'+score_type].detach().cpu() 
+        conf_t = self._phs['val'][layer]['score_'+score_type].detach().cpu() 
         conf_v = self._phs['val'][layer]['score_'+score_type].detach().cpu() 
  
         th = [] 
@@ -185,7 +186,13 @@ class Peepholes:
         lf = []
 
         c = cvs['val'].dataset['result'].detach().cpu().numpy()
+        pred = cvs['val'].dataset['pred'].detach().cpu().numpy()
+        true = cvs['val'].dataset['label'].detach().cpu().numpy()
         cntt = Counter(c) 
+
+        # initial acc
+        ic = np.sum(pred==true)
+        iacc = ic/len(true)
         
         for q in quantiles:
             perc = torch.quantile(conf_t, q)
@@ -197,20 +204,37 @@ class Peepholes:
             lt.append(cnt[True]/cntt[True]) 
             lf.append(cnt[False]/cntt[False])
 
+            if q==0.1:
+                pred_ = pred[idx]
+                true_ = true[idx]
+                fc = np.sum(pred_==true_)
+                facc = fc/len(idx) if len(idx)>0 else 0
+
+        acc_gain = facc - iacc
+
         plt.figure()
         x = quantiles.numpy()
+        d = 1 - x
         y1 = np.array(lt)
         y2 = np.array(lf)
         plt.plot(x, y1, label='OK', c='b')
         plt.plot(x, y2, label='KO', c='r')
-        plt.plot(np.array([0., 1.]), np.array([1., 0.]), c='k')
+        plt.plot(x, d, c='k')
         plt.legend()
-        plt.savefig((self.path/self.name).as_posix()+'.png')
+        plt.grid(ls=':')
+        plt.savefig((self.path/f'{layer}.{self.name}.{score_type}').as_posix()+'.png')
         plt.close()
         
         # TODO: make dist to diagonal
-        # TODO: save and load evaluation scores
-        return np.linalg.norm(y1-y2), np.linalg.norm(y1-y2)
+        cmp = [20, 50, 100]
+        d1 = []
+        d2 = []
+        for i in cmp:
+            # d1.append(np.abs(y1[i]-d[i]))
+            # d2.append(np.abs(y2[i]-d[i]))
+            d1.append(y1[i] - d[i])
+            d2.append(d[i] - y2[i])
+        return np.mean(d1), np.mean(d2), acc_gain
 
     def get_dataloaders(self, **kwargs):
         self.check_uncontexted()

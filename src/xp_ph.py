@@ -208,6 +208,7 @@ if __name__ == "__main__":
             batch_size = bs,
             verbose=verbose
             )
+    input('Wait sc')
 
         i = 0
         print('\nPrinting some peeps')

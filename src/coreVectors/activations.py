@@ -12,6 +12,7 @@ def get_activations(self, **kwargs):
     model = self._model
     device = self.device 
     hooks = model.get_hooks()
+    save_activations = kwargs['save_activations'] if 'save_activations' in kwargs else False # not used yet
 
     bs = kwargs['batch_size'] if 'batch_size' in kwargs else 64
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
@@ -38,6 +39,14 @@ def get_activations(self, **kwargs):
         #------------------------------------------------
         act_td = self._actds[ds_key]
         cvs_td = self._corevds[ds_key]
+
+        # to check if pred and results data exist 
+        has_pred = 'pred' in _td 
+        
+        # allocate memory for pred and result
+        if not has_pred:
+            _td['pred'] = MMT.empty(shape=torch.Size((n_samples,)), dtype=torch.int16)
+            _td['result'] = MMT.empty(shape=torch.Size((n_samples,)), dtype=torch.bool)
 
         # check if in and out activations exist
         if model._si and (not ('in_activations' in act_td)):
@@ -115,4 +124,3 @@ def get_activations(self, **kwargs):
                 if model._so:
                     act_data['out_activations'][lk] = hooks[lk].out_activations[:]
     return 
-

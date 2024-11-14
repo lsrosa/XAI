@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 
 # sklearn stuff
 from sklearn.mixture import GaussianMixture
+from joblib import parallel_backend
 
 # TODO: check learning models such as https://discuss.pytorch.org/t/fit-gaussian-mixture-model/121826
 
@@ -36,7 +37,8 @@ class GMM(ClassifierBase): # quella buona
         data = self.parser(data=_data, **self.parser_kwargs)
 
         if verbose: print('Fitting GMM')
-        self._classifier.fit(data)
+        with parallel_backend('threading', n_jobs=16):
+            self._classifier.fit(data)
         
         self._fit_dl = _dl
         return
