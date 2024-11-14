@@ -12,7 +12,6 @@ def get_activations(self, **kwargs):
     model = self._model
     device = self.device 
     hooks = model.get_hooks()
-    save_activations = kwargs['save_activations'] if 'save_activations' in kwargs else False # not used yet
 
     bs = kwargs['batch_size'] if 'batch_size' in kwargs else 64
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
