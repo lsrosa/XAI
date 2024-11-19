@@ -11,7 +11,8 @@ from coreVectors.svd_coreVectors import reduct_matrices_from_svds as parser_fn
 from classifier.classifier_base import trim_corevectors
 from classifier.kmeans import KMeans 
 from classifier.gmm import GMM 
-#from classifier.tkmeans import KMeans as tKMeans 
+from classifier.tkmeans import KMeans as tKMeans 
+from classifier.tgmm import GMM as tGMM 
 from peepholes.peepholes import Peepholes
 
 # torch stuff
@@ -20,7 +21,7 @@ from torchvision.models import vgg16, VGG16_Weights
 
 if __name__ == "__main__":
     use_cuda = torch.cuda.is_available()
-    cuda_index = torch.cuda.device_count() - 3
+    cuda_index = 1#torch.cuda.device_count() - 3
     device = torch.device(f"cuda:{cuda_index}" if use_cuda else "cpu")
     print(f"Using {device} device")
 
@@ -150,17 +151,16 @@ if __name__ == "__main__":
             loaders = ['train', 'test', 'val'],
             verbose = True
             ) 
-    
-    # the corevector batch_size needs to be >= nl_classifier
-    bd = {'train':300, 'test': 300, 'val': 300}
+    _dlp = 9 
+    bd = {'train':2**_dlp, 'test':2**_dlp, 'val':2**_dlp}
     cv_dl = cv.get_dataloaders(verbose=True, batch_dict=bd)
     n_classes = 300
 
     parser_cv = trim_corevectors
-    parser_kwargs = {'layer': 'classifier.0', 'peep_size':30}
-    cls_kwargs = {'random_state': 42, 'n_init':10, 'max_iter':60} 
-    cls = GMM(
-            nl_classifier = 10,
+    parser_kwargs = {'layer': 'classifier.0', 'peep_size':300}
+    cls_kwargs = {}#{'batch_size':256} 
+    cls = tGMM(
+            nl_classifier = 300,
             nl_model = n_classes,
             parser = parser_cv,
             parser_kwargs = parser_kwargs,
@@ -169,9 +169,9 @@ if __name__ == "__main__":
             )
     
     t0 = time()
-    cls.fit(dataloader = cv_dl['test'], verbose=verbose)
+    cls.fit(dataloader = cv_dl['train'], verbose=verbose)
     print('Fitting time = ', time()-t0)
-
+    
     cls.compute_empirical_posteriors(verbose=verbose)
 
     ph = Peepholes(
@@ -179,12 +179,14 @@ if __name__ == "__main__":
             name = phs_name,
             classifier = cls,
             layer = 'classifier.0',
+            device = device
             )
-
+    input('Wait ph')
     ph.get_peepholes(
             loaders = cv_dl,
             verbose = verbose
             )
+    input('Wait sc')
 
     ph.get_scores(verbose=verbose)
 

@@ -23,7 +23,7 @@ def trim_corevectors(**kwargs):
     data = kwargs['data']
     layer = kwargs['layer']
     peep_size = kwargs['peep_size']
-    return (data['coreVectors'][layer].contiguous())[:,0:peep_size]
+    return data['coreVectors'][layer][:,0:peep_size]
 
 def null_parser(**kwargs):
     data = kwargs['data']
@@ -74,9 +74,9 @@ class ClassifierBase: # quella buona
         _empp = torch.zeros(self.nl_class, self.nl_model)
 
         # iterate over _fit_data
-        if verbose: print('Computing empirical posterios')
+        if verbose: print('Computing empirical posterior')
         for batch in tqdm(self._fit_dl, disable=not verbose):
-            data = self.parser(data=batch, **self.parser_kwargs)
+            data = self.parser(data=batch, **self.parser_kwargs).to(self.device)
             preds = self._classifier.predict(data)
             labels = batch['label']
             for p, l in zip(preds, labels):

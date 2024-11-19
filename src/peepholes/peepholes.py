@@ -16,6 +16,8 @@ class Peepholes:
         self.layer = kwargs['layer']
         self.path = Path(kwargs['path'])
         self.name = Path(kwargs['name'])
+        self.device = kwargs['device'] if 'device' in kwargs else 'cpu'
+
         # create folder
         self.path.mkdir(parents=True, exist_ok=True)
 
@@ -37,14 +39,13 @@ class Peepholes:
         '''
         if self._classifier._empp == None:
             raise RuntimeError('No prediction probabilities. Please run classifier.compute_empirical_posteriors() first.')
-        
+        _empp = self._classifier._empp.to(self.device)
+
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         n_threads = kwargs['n_threads'] if 'n_threads' in kwargs else 32
         _dls = kwargs['loaders']
 
         layer = self.layer 
-        # device = kwargs['device']
-
         _phs = {} 
 
         for loader_name in _dls:
@@ -81,9 +82,9 @@ class Peepholes:
                 if verbose: print('\n ---- computing peepholes \n')
                 for bn, batch in enumerate(tqdm(_dls[loader_name], disable=not verbose)):
                     n_in = len(batch)
-                    cp = self._classifier.classifier_probabilities(batch=batch, verbose=verbose)
+                    cp = self._classifier.classifier_probabilities(batch=batch, verbose=verbose).to(self.device)
                     # print('cp %d: '%bn, cp)
-                    _lp = cp@self._classifier._empp
+                    _lp = cp@_empp
                     _lp /= _lp.sum(dim=1, keepdim=True)
                     
                     _phs[loader_name][layer]['peepholes'][bn*bs:bn*bs+n_in] = _lp

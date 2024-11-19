@@ -10,6 +10,8 @@ from coreVectors.svd_coreVectors import reduct_matrices_from_svds as parser_fn
 from classifier.classifier_base import trim_corevectors
 from classifier.kmeans import KMeans 
 from classifier.gmm import GMM 
+from classifier.tkmeans import KMeans as tKMeans 
+from classifier.tgmm import GMM as tGMM 
 from peepholes.peepholes import Peepholes
 
 # torch stuff
@@ -30,8 +32,6 @@ import ray.cloudpickle as pickle
 def peephole_wrap(config, **kwargs):
     peep_size = config['peep_size'] 
     n_cls = config['n_classifier']
-    n_init = config['n_init']
-    max_iter = config['max_iter']
     score_type = config['score_type']
     
     cv_dl = kwargs['corevec_dataloader']
@@ -53,17 +53,18 @@ def peephole_wrap(config, **kwargs):
     n_classes = 100
     target_layer = 'classifier.0' 
     parser_kwargs = {'layer': target_layer, 'peep_size':peep_size}
-    cls_kwargs = {'n_init':n_init, 'max_iter':max_iter} 
-    ph_config_name = ph_name+f'.{peep_size}.{n_cls}.{n_init}.{max_iter}.{score_type}'
+    cls_kwargs = {}#{'n_init':n_init, 'max_iter':max_iter} 
+    ph_config_name = ph_name+f'.{peep_size}.{n_cls}.{score_type}'
 
     g = list(ph_path.glob(f'{ph_config_name}.*')) 
     if len(g) > 0:
-        print('Already run this configuration, skipping KMeans')
+        print('Already run this configuration, skipping peepholes computation')
         ph = Peepholes(
                 path = ph_path,
                 name = ph_config_name,
                 classifier = None,
                 layer = target_layer,
+                device = device
                 )
         
         ph.load_only(
@@ -71,12 +72,13 @@ def peephole_wrap(config, **kwargs):
                 verbose = True
                 )
     else:
-        cls = KMeans(
+        cls = tGMM(
                 nl_classifier = n_cls,
                 nl_model = n_classes,
                 parser = parser_cv,
                 parser_kwargs = parser_kwargs,
-                cls_kwargs = cls_kwargs
+                cls_kwargs = cls_kwargs,
+                device = device
                 )
                                                                          
         cls.fit(dataloader = cv_dl['train'], verbose=True)
@@ -87,6 +89,7 @@ def peephole_wrap(config, **kwargs):
                 name = ph_config_name,
                 classifier = cls,
                 layer = target_layer,
+                device = device
                 )
 
         ph.get_peepholes(
@@ -144,7 +147,7 @@ if __name__ == "__main__":
     
     phs_name = 'peepholes'
     phs_path = Path.cwd()/'../data/peepholes'
-
+    phs_path.mkdir(parents=True, exist_ok=True)
     #--------------------------------
     # CoreVectors 
     #--------------------------------
@@ -175,15 +178,13 @@ if __name__ == "__main__":
     config = {
             'peep_size': tune.choice([2**i for i in range(2, 9)]),
             'n_classifier': tune.choice([2**i for i in range(2, 9)]),
-            'n_init': tune.choice([50*i for i in range(1, 3)]),
-            'max_iter': tune.choice([100*i for i in range(3, 4)]),
             'score_type': tune.choice(['max', 'entropy']), 
             }
 
     if device == 'cpu':
         resources = {"cpu": 1}
     else:
-        resources = {"cpu": 16, "gpu": 2}
+        resources = {"cpu": 16, "gpu": 5}
 
     hyper_params_file = phs_path/f'hyperparams.pickle'
     if hyper_params_file.exists():
@@ -212,7 +213,7 @@ if __name__ == "__main__":
             trainable,
             tune_config = tune.TuneConfig(
                 search_alg = algo,
-                num_samples = 1, 
+                num_samples = 15, 
                 scheduler = scheduler,
                 ),
             run_config = train.RunConfig(
