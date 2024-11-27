@@ -5,23 +5,6 @@ import abc
 # torch stuff
 import torch
 
-#input dict and m - return 2 arrays
-def flatten_dictionary(d, m):
-    if not isinstance(d, dict): # leaf
-        keys = [str(i) for i in d]
-        layers = [m._modules[str(i)] for i in d]
-        return keys, layers
-    else:
-        keys = []
-        layers = []
-        for k in d:
-            _k, _l = flatten_dictionary(d[k], m._modules[k])
-            _k = [k+'.'+ tempk for tempk in _k]
-            keys += _k
-            layers += _l
-        return keys, layers
-
-
 class Hook:
     def __init__(self, save_input=True, save_output=False):
         self.layer = None 
@@ -143,32 +126,24 @@ class ModelWrap(metaclass=abc.ABCMeta):
 
     def set_target_layers(self, **kwargs):
         '''
-        Set target layers studied with peephole. Other functions will operate only for the layers specified here: add_hooks()
-
+        Set the variable target_layers as a dictionary: the keys are the name of the layers (string) from the state_dict, the values are layers
+   
         Args:
-        - target_layers (dict): keys are the module names as in the loaded state_dict. 
+        - key_list (list): list of filtered keys from the state dict
         '''
-        tl_in = kwargs['target_layers'] if 'target_layers' in kwargs else None  #input dict
-        verbose = kwargs['verbose'] if 'verbose' in kwargs else False
-        
-        if not self._state_dict:
-            raise RuntimeError('No state_dict loaded. Please run set_model() first.')
+        key_list = kwargs['key_list']
 
-        k_out, l_out = flatten_dictionary(tl_in, self._model)
-        
-        # create the dict
-        tl_out = dict(zip(k_out, l_out))
-        
-        # get unique set of keys, removing the '.weights' and '.bias'
-        _keys = sorted(list(set([k.replace('.weight','').replace('.bias','') for k in self._state_dict.keys()])))
+        _dict = {}
 
-        # check if the keys you create are present in _keys
-        for k in tl_out:
-            assert(k in _keys)
+        for _str in key_list:
+            layer = self.get_layer(layername=_str)
+            if layer != None:
+                _dict[_str] = layer
+
+        self._target_layers = _dict
         
-        self._target_layers = tl_out
         return
-    
+
     def dry_run(self, **kwargs):
         '''
         A dry run is used to collect information from the module, such as activation's sizes
@@ -218,3 +193,26 @@ class ModelWrap(metaclass=abc.ABCMeta):
         if not self._hooks:
             raise RuntimeError('No hooks available. Please run add_hooks() first.')
         return self._hooks
+    
+    def get_layer(self, **kwargs):
+        '''
+        Get the module of the neural network corresponding to the string passed as input
+        
+        Args:
+        - layername (str): name of the layer we are searching for
+        
+        Returns:
+        - temp: torch module
+        '''
+        temp = self._model
+        layer_name = kwargs['layername']
+
+        keys = layer_name.split(".")
+        
+        for p in keys:
+            #check that all the strings in parts are actually keys of the dict temp._modules
+            if p not in temp._modules.keys():
+                return None
+            temp = temp._modules[p]
+            
+        return temp
