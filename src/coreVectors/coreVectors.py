@@ -1,11 +1,12 @@
 # torch stuff
 import torch
 from torch.utils.data import DataLoader 
-from tensordict import TensorDict
+from tensordict import TensorDict, PersistentTensorDict
 
 # generic python stuff
 from pathlib import Path
 from tqdm import tqdm
+from functools import partial
 
 class CoreVectors():
     from coreVectors.dataset import get_coreVec_dataset
@@ -18,7 +19,8 @@ class CoreVectors():
         # create folder
         self.path.mkdir(parents=True, exist_ok=True)
 
-        self._model = kwargs['model'] 
+        self._model = kwargs['model'] if 'model' in kwargs else None  
+        self.device = kwargs['device'] if 'device' in kwargs else 'cpu'  
 
         # computed in get_activations()
         self._loaders = None
@@ -33,9 +35,14 @@ class CoreVectors():
         self._norm_mean = None 
         self._norm_std = None 
         self._is_normalized = None
+        
+        # Set on __enter__() and __exit__()
+        # read before each function
+        self._is_contexted = False
         return
-    
+     
     def normalize_corevectors(self, **kwargs):
+        self.check_uncontexted()
         wrt = kwargs['wrt']
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
         bs = kwargs['batch_size'] if 'batch_size' in kwargs else 64 
@@ -80,9 +87,10 @@ class CoreVectors():
             if verbose: print(f'\n ---- Normalizing core vectors for {ds_key}\n')
             td = self._corevds[ds_key]['coreVectors']  
             dl = DataLoader(td, batch_size=bs, collate_fn=lambda x: x)
-            for bn, batch in enumerate(tqdm(dl, disable=not verbose)):
+            for batch in tqdm(dl, disable=not verbose, total=len(dl)):
                 n_in = len(batch) 
-                self._corevds[ds_key]['coreVectors'][bn*bs:bn*bs+n_in] = (batch - means)/stds
+                batch = (batch - means)/stds
+
             is_normed[ds_key] = list(set(layers_to_norm[ds_key]).union(is_normed[ds_key])) 
         print('is normed: ', is_normed)
 
@@ -95,7 +103,16 @@ class CoreVectors():
         return
 
     def get_dataloaders(self, **kwargs):
-        batch_dict = kwargs['batch_dict'] if 'batch_dict' in kwargs else {key: 64 for key in self._corevds}
+        self.check_uncontexted()
+        
+        _bs = kwargs['batch_size'] if 'batch_size' in kwargs else 64
+        if isinstance(_bs, int):
+            batch_dict = {key: _bs for key in self._corevds}
+        elif isinstance(_bs, dict):
+            batch_dict = _bs
+        else:
+            raise RuntimeError('Batch size should be a dict or an integer')
+
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
         if self._loaders:
             if verbose: print('Loaders exist. Returning existing ones.')
@@ -115,9 +132,10 @@ class CoreVectors():
         return self._loaders
     
     def load_only(self, **kwargs):
+        self.check_uncontexted()
+
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         loaders = kwargs['loaders']
-        n_threads = kwargs['n_threads'] if 'n_threads' in kwargs else 32 
 
         _corevds = {}
         _n_samples = {}
@@ -129,14 +147,15 @@ class CoreVectors():
             _file_paths[loader_name] = file_path
             
             if verbose: print(f'File {file_path} exists. Loading from disk.')
-            _corevds[loader_name] = TensorDict.load_memmap(file_path)
-            _corevds[loader_name].lock_()
+            _corevds[loader_name] = PersistentTensorDict.from_h5(file_path, mode='r').to(self.device)
+
             n_samples = len(_corevds[loader_name])
             if verbose: print('loaded n_samples: ', n_samples)
         
         norm_file_path = self.path/(self.name.name+'.normalization')
         if norm_file_path.exists():
             if verbose: print('Loading normalization info.')
+            # TODO: should save and load these as non-tensor within tensordict
             means, stds, is_normed, wrt = torch.load(norm_file_path)
             self._norm_mean = means 
             self._norm_std = stds
@@ -150,4 +169,27 @@ class CoreVectors():
         self._n_samples = _n_samples
         self._corevds = _corevds
 
+        return
+    
+    def __enter__(self):
+        self._is_contexted = True
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        verbose = True 
+
+        if self._corevds == None:
+            if verbose: print('no corevds to close. doing nothing.')
+            return
+
+        for loader_name in self._corevds:
+            if verbose: print(f'closing {loader_name}')
+            self._corevds[loader_name].close()
+            
+        self._is_contexted = False 
+        return
+
+    def check_uncontexted(self):
+        if not self._is_contexted:
+            raise RuntimeError('Function should be called within context manager')
         return

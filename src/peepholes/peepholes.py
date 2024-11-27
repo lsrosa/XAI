@@ -7,7 +7,7 @@ import numpy as np
 
 # torch stuff
 import torch
-from tensordict import TensorDict
+from tensordict import TensorDict, PersistentTensorDict
 from tensordict import MemoryMappedTensor as MMT
 from torch.utils.data import DataLoader 
 
@@ -24,10 +24,15 @@ class Peepholes:
         self._classifier = kwargs['classifier'] 
 
         # computed in get_peepholes
-        self._phs = None
+        self._phs = {} 
         
         # computed in get_dataloaders()
         self._loaders = None
+
+        # Set on __enter__() and __exit__()
+        # read before each function
+        self._is_contexted = False
+
         return
 
     def get_peepholes(self, **kwargs):
@@ -37,58 +42,52 @@ class Peepholes:
         Args:
         - dataloader (DataLoader): Dataloader containing data to be parsed with the paser function set on __init__() 
         '''
+        self.check_uncontexted()
+
         if self._classifier._empp == None:
             raise RuntimeError('No prediction probabilities. Please run classifier.compute_empirical_posteriors() first.')
         _empp = self._classifier._empp.to(self.device)
-
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False
-        n_threads = kwargs['n_threads'] if 'n_threads' in kwargs else 32
         _dls = kwargs['loaders']
 
         layer = self.layer 
-        _phs = {} 
 
-        for loader_name in _dls:
-            bs = _dls[loader_name].batch_size
-            if verbose: print(f'\n ---- Getting peepholes for {loader_name}\n')
-            file_path = self.path/(self.name.name+'.'+loader_name)
+        for ds_key in _dls:
+            bs = _dls[ds_key].batch_size
+            if verbose: print(f'\n ---- Getting peepholes for {ds_key}\n')
+            file_path = self.path/(self.name.name+'.'+ds_key)
            
             if file_path.exists():
                 if verbose: print(f'File {file_path} exists. Loading from disk.')
-                _phs[loader_name] = TensorDict.load_memmap(file_path)
-                _phs[loader_name].lock_()
-                n_samples = len(_phs[loader_name])
+                self._phs[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r+').to(self.device)
+                n_samples = len(self._phs[ds_key])
                 if verbose: print('loaded n_samples: ', n_samples)
             else:
-                n_samples = len(_dls[loader_name].dataset)
+                n_samples = len(_dls[ds_key].dataset)
                 if verbose: print('loader n_samples: ', n_samples) 
-                _ph = TensorDict(batch_size=n_samples)
-                _phs[loader_name] = _ph.memmap_like(file_path, num_threads=n_threads)   
+                self._phs[ds_key] = PersistentTensorDict(filename=file_path, batch_size=[n_samples], device=self.device, mode='w')
             
             #-----------------------------------------
             # Pre-allocate peepholes
             #-----------------------------------------
-            _td = _phs[loader_name]
-            if not layer in _td:
+            if not layer in self._phs[ds_key]:
                 if verbose: print('allocating peepholes for layer: ', layer)
-                _td.unlock_()
-                _td[layer] = TensorDict(batch_size=n_samples)
-                _td[layer]['peepholes'] = MMT.empty(shape=(n_samples, self._classifier.nl_model))
-                _phs[loader_name] = _td.memmap_like(file_path, num_threads=n_threads)
+                self._phs[ds_key][layer] = TensorDict(batch_size=n_samples)
+                self._phs[ds_key][layer]['peepholes'] = MMT.empty(shape=(n_samples, self._classifier.nl_model))
              
                 #----------------------------------------- 
                 # computing peepholes
                 #-----------------------------------------
                 if verbose: print('\n ---- computing peepholes \n')
-                for bn, batch in enumerate(tqdm(_dls[loader_name], disable=not verbose)):
-                    n_in = len(batch)
-                    cp = self._classifier.classifier_probabilities(batch=batch, verbose=verbose).to(self.device)
-                    # print('cp %d: '%bn, cp)
+                _dl_t = DataLoader(self._phs[ds_key], batch_size=bs, collate_fn=lambda x:x)
+                for batch in tqdm(zip(_dls[ds_key], _dl_t), disable=not verbose, total=len(_dl_t)):
+                    data_in, data_t = batch
+                    cp = self._classifier.classifier_probabilities(batch=data_in, verbose=verbose).to(self.device)
                     _lp = cp@_empp
                     _lp /= _lp.sum(dim=1, keepdim=True)
-                    
-                    _phs[loader_name][layer]['peepholes'][bn*bs:bn*bs+n_in] = _lp
-            self._phs = _phs
+                    data_t[layer]['peepholes'] = _lp
+            else:
+                if verbose: print('Peepholes for {layer} already present. Skipping.')
         return 
 
     def get_scores(self, **kwargs):
@@ -98,6 +97,7 @@ class Peepholes:
         Args:
         - dataloader (DataLoader): Dataloader containing data to be parsed with the parser function set on __init__() 
         '''
+        self.check_uncontexted()
         
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         n_threads = kwargs['n_threads'] if 'n_threads' in kwargs else 32
@@ -107,26 +107,25 @@ class Peepholes:
         if self._phs == None:
             raise RuntimeError('No core vectors present. Please run get_peepholes() first.')
 
-        for loader_name in self._phs:
-            if verbose: print(f'\n ---- Getting scores for {loader_name}\n')
-            file_path = self.path / (self.name.name + '.' + loader_name)
+        for ds_key in self._phs:
+            if verbose: print(f'\n ---- Getting scores for {ds_key}\n')
+            file_path = self.path / (self.name.name + '.' + ds_key)
     
             #-----------------------------------------
             # Check if peepholes exist before computing scores
             #-----------------------------------------
-            _td = self._phs[loader_name]
-            n_samples = len(_td)
-            print(n_samples)
-            if layer not in _td:
+            n_samples = len(self._phs[ds_key])
+
+            if layer not in self._phs[ds_key]:
                 raise ValueError(f"Peepholes for layer {layer} do not exist. Please run get_peepholes() first.")
             
-            if 'peepholes' not in _td[layer]:
+            if 'peepholes' not in self._phs[ds_key][layer]:
                 raise ValueError(f"Peepholes do not exist in layer {layer}. Please run get_peepholes() first.")
             
             #-----------------------------------------
             # Check if scores already exist
             #-----------------------------------------
-            if 'score_max' in _td[layer] and 'score_entropy' in _td[layer]:
+            if 'score_max' in self._phs[ds_key][layer] and 'score_entropy' in self._phs[ds_key][layer]:
                 if verbose: print(f"Scores already computed for layer {layer}. Skipping computation.")
                 continue 
 
@@ -134,43 +133,41 @@ class Peepholes:
             # Pre-allocate scores
             #-----------------------------------------
             if verbose: print('Allocating scores for layer:', layer)
-            _td.unlock_()
-            _td[layer]['score_max'] = MMT.empty(shape=(n_samples,))
+            self._phs[ds_key][layer].batch_size = torch.Size((n_samples,))
+            self._phs[ds_key][layer]['score_max'] = MMT.empty(shape=(n_samples,))
     
-            _td[layer]['score_entropy'] = MMT.empty(shape=(n_samples,))
+            self._phs[ds_key][layer]['score_entropy'] = MMT.empty(shape=(n_samples,))
              
-            self._phs[loader_name] = _td.memmap_like(file_path, num_threads=n_threads)   
-
             #-----------------------------------------
             # Compute scores
             #-----------------------------------------
             if verbose: print('\n ---- Computing scores \n')
-            _dl = DataLoader(self._phs[loader_name], batch_size=bs, collate_fn=lambda x: x)
-            for bn, batch in enumerate(tqdm(_dl)):
-                n_in = len(batch)
+            _dl = DataLoader(self._phs[ds_key], batch_size=bs, collate_fn=lambda x: x)
+            for batch in tqdm(_dl, disable=not verbose, total=len(_dl)):
                 peepholes = batch[layer]['peepholes']
-                self._phs[loader_name][layer]['score_max'][bn*bs:bn*bs+n_in] = torch.max(peepholes, dim=1).values
-                self._phs[loader_name][layer]['score_entropy'][bn*bs:bn*bs+n_in] = torch.sum(peepholes * torch.log(peepholes + 1e-12), dim=1)
+                batch[layer]['score_max'] = torch.max(peepholes, dim=1).values
+                batch[layer]['score_entropy'] = torch.sum(peepholes * torch.log(peepholes + 1e-12), dim=1)
     
         return
     
     def load_only(self, **kwargs):
+        self.check_uncontexted()
+
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         loaders = kwargs['loaders']
-        _phs = {} 
 
-        for loader_name in loaders:
-            if verbose: print(f'\n ---- Getting peepholes for {loader_name}\n')
-            file_path = self.path/(self.name.name+'.'+loader_name)
+        for ds_key in loaders:
+            if verbose: print(f'\n ---- Getting peepholes for {ds_key}\n')
+            file_path = self.path/(self.name.name+'.'+ds_key)
            
             if verbose: print(f'File {file_path} exists. Loading from disk.')
-            _phs[loader_name] = TensorDict.load_memmap(file_path)
-            _phs[loader_name].lock_()
+            _phs[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r').to(self.device)
         
-        self._phs = _phs
         return
 
     def evaluate(self, **kwargs): 
+        self.check_uncontexted()
+
         layer = self.layer 
         cvs = kwargs['coreVectors']
         score_type = kwargs['score_type']
@@ -180,13 +177,14 @@ class Peepholes:
         prob_val = self._phs['val'][layer]['peepholes']
         
         # TODO: vectorize
-        conf_t = self._phs['train'][layer]['score_'+score_type] 
-        conf_v = self._phs['val'][layer]['score_'+score_type] 
+        conf_t = self._phs['train'][layer]['score_'+score_type].detach().cpu() 
+        conf_v = self._phs['val'][layer]['score_'+score_type].detach().cpu() 
+ 
         th = [] 
         lt = []
         lf = []
 
-        c = cvs['val'].dataset['result'].detach().numpy()
+        c = cvs['val'].dataset['result'].detach().cpu().numpy()
         cntt = Counter(c) 
         
         for q in quantiles:
@@ -215,6 +213,8 @@ class Peepholes:
         return np.linalg.norm(y1-y2), np.linalg.norm(y1-y2)
 
     def get_dataloaders(self, **kwargs):
+        self.check_uncontexted()
+
         batch_dict = kwargs['batch_dict'] if 'batch_dict' in kwargs else {key: 64 for key in self._phs}
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
 
@@ -233,3 +233,26 @@ class Peepholes:
 
         self._loaders = _loaders 
         return self._loaders
+
+    def __enter__(self):
+        self._is_contexted = True
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        verbose = True 
+
+        if self._phs == None:
+            if verbose: print('no peepholes to close. doing nothing.')
+            return
+
+        for ds_key in self._phs:
+            if verbose: print(f'closing {ds_key}')
+            self._phs[ds_key].close()
+            
+        self._is_contexted = False 
+        return
+
+    def check_uncontexted(self):
+        if not self._is_contexted:
+            raise RuntimeError('Function should be called within context manager')
+        return

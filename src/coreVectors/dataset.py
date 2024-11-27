@@ -3,57 +3,57 @@ from tqdm import tqdm
 
 # torch stuff
 import torch
-from tensordict import TensorDict
+from tensordict import TensorDict, PersistentTensorDict
 from tensordict import MemoryMappedTensor as MMT
+from torch.utils.data import DataLoader
 
 def get_coreVec_dataset(self, **kwargs):
+    self.check_uncontexted()
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False
     loaders = kwargs['loaders']
-    n_threads = kwargs['n_threads'] if 'n_threads' in kwargs else 32 
 
     _corevds = {}
     _n_samples = {}
     _file_paths = {}
 
-    for loader_name in loaders:
-        if verbose: print(f'\n ---- Getting data from {loader_name}\n')
-        file_path = self.path/(self.name.name+'.'+loader_name)
-        _file_paths[loader_name] = file_path
-        bs = loaders[loader_name].batch_size
+    for ds_key in loaders:
+        if verbose: print(f'\n ---- Getting data from {ds_key}\n')
+        file_path = self.path/(self.name.name+'.'+ds_key)
+        _file_paths[ds_key] = file_path
+        bs = loaders[ds_key].batch_size
         
         if file_path.exists():
             if verbose: print(f'File {file_path} exists. Loading from disk.')
-            _corevds[loader_name] = TensorDict.load_memmap(file_path)
-            _corevds[loader_name].lock_()
-            n_samples = len(_corevds[loader_name])
+            _corevds[ds_key] = TensorDict.from_h5(file_path, mode='r+').to(self.device)
+
+            n_samples = len(_corevds[ds_key])
             if verbose: print('loaded n_samples: ', n_samples)
         else:
-            n_samples = len(loaders[loader_name].dataset)
+            n_samples = len(loaders[ds_key].dataset)
             if verbose: print('loader n_samples: ', n_samples) 
-            #TODO: check device
-            _td = TensorDict(batch_size=n_samples)
+            _corevds[ds_key] = PersistentTensorDict(filename=file_path, batch_size=[n_samples], device=self.device, mode='w')
             
             #------------------------
             # copy images and labels
             #------------------------
             
             # get shapes for pre-allocation
-            _img, _label = loaders[loader_name].dataset[0]
-            # pre-allocate
-            _td['image'] = MMT.empty(shape=torch.Size((n_samples,)+_img.shape)) 
-            _td['label'] = MMT.empty(shape=torch.Size((n_samples,))) 
-
             if verbose: print('Allocating data')
-            _corevds[loader_name] = _td.memmap_like(file_path, num_threads=n_threads)
+            _img, _label = loaders[ds_key].dataset[0]
+            # pre-allocate
+            _corevds[ds_key]['image'] = MMT.empty(shape=torch.Size((n_samples,)+_img.shape)) 
+            _corevds[ds_key]['label'] = MMT.empty(shape=torch.Size((n_samples,))) 
 
             if verbose: print('Copying images and labels')
-            for bn, data in enumerate(tqdm(loaders[loader_name], disable=not verbose)): 
-                images, labels = data
-                n_in = len(images)
-                _corevds[loader_name]['image'][bn*bs:bn*bs+n_in] = images
-                _corevds[loader_name]['label'][bn*bs:bn*bs+n_in] = labels
+            dl_in = loaders[ds_key]
+            dl_t = DataLoader(_corevds[ds_key], batch_size=bs, collate_fn=lambda x:x)
+            for data in tqdm(zip(dl_in, dl_t), disable=not verbose, total=len(dl_in)): 
+                data_in, data_t = data
+                images, labels = data_in
+                data_t['image'] = images
+                data_t['label'] = labels
         
-        _n_samples[loader_name] = n_samples
+        _n_samples[ds_key] = n_samples
     
     # save computed data within the class
     self._file_paths = _file_paths

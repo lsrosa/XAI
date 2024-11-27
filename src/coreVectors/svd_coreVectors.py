@@ -13,11 +13,11 @@ def reduct_matrices_from_svds(svd, lk):
     return svd[lk]['Vh']
 
 def get_coreVectors(self, **kwargs):
+    self.check_uncontexted()
     model = self._model 
     device = model.device 
     normalize_wrt = kwargs['normalize_wrt'] if 'normalize_wrt' in kwargs else None 
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False
-    n_threads = kwargs['n_threads'] if 'n_threads' in kwargs else 32
 
     bs = kwargs['batch_size'] if 'batch_size' in kwargs else 64
     reduct_matrices = kwargs['reduct_matrices']
@@ -34,14 +34,14 @@ def get_coreVectors(self, **kwargs):
         n_samples = self._n_samples[ds_key]       
         
         _td = self._corevds[ds_key]
-        _td.unlock_()
 
         # create corevectors TensorDict if needed 
         if not 'coreVectors' in _td:
             if verbose: print('adding core vectors tensorDict')
             _td['coreVectors'] = TensorDict(batch_size=n_samples)
         elif verbose: print('core vectors TensorDict exists.')
-        
+        _td['coreVectors'].batch_size = torch.Size((n_samples,))
+
         # check if layer in and out activations exist
         _layers_to_save = []
         for lk in model.get_target_layers():
@@ -56,15 +56,8 @@ def get_coreVectors(self, **kwargs):
 
         if verbose: print('Layers to save: ', _layers_to_save)
         if len(_layers_to_save) == 0:
-            self._corevds[ds_key].lock_()
             print(f'No new core vectors for {ds_key}, skipping')
             continue
-
-        #-----------------------------------
-        # Saving updates to memory
-        #-----------------------------------
-        if verbose: print(f'Saving {ds_key} to {file_path}.')
-        self._corevds[ds_key] = _td.memmap_like(file_path, num_threads=n_threads)
 
         # ---------------------------------------
         # compute corevectors 
@@ -80,26 +73,26 @@ def get_coreVectors(self, **kwargs):
             
             layer = model._target_layers[lk]
             if isinstance(layer, torch.nn.Linear):
-                for bn, data in enumerate(tqdm(_dl, disable=not verbose)):
+                for data in tqdm(_dl, disable=not verbose, total=len(_dl)):
                     n_act = data['in_activations'][lk].shape[0]
                     acts = data['in_activations'][lk].contiguous()
                     acts_flat = acts.flatten(start_dim=1)
-                    ones = torch.ones(n_act, 1)
-                    _acts = torch.hstack((acts_flat, ones)).to(device)
+                    ones = torch.ones(n_act, 1).to(device)
+                    _acts = torch.hstack((acts_flat, ones))
                     phs = (reduct_m@_acts.T).T
-                    self._corevds[ds_key]['coreVectors'][lk][bn*bs:bn*bs+n_act] = phs
+                    data['coreVectors'][lk] = phs
             if isinstance(layer, torch.nn.Conv2d):
                 pad_mode = layer.padding_mode if layer.padding_mode != 'zeros' else 'constant'
                 padding = _reverse_repeat_tuple(layer.padding, 2) 
-                for bn, data in enumerate(tqdm(_dl, disable=not verbose)):
+                for data in tqdm(_dl, disable=not verbose, total=len(_dl)):
                     n_act = data['in_activations'][lk].shape[0]
                     acts = data['in_activations'][lk].contiguous()
                     acts_pad = pad(acts, pad=padding, mode=pad_mode)
 
                     acts_flat = acts_pad.flatten(start_dim=1)
-                    ones = torch.ones(n_act, 1)
-                    _acts = torch.hstack((acts_flat, ones)).to(device)
+                    ones = torch.ones(n_act, 1).to(device)
+                    _acts = torch.hstack((acts_flat, ones))
                     phs = (reduct_m@_acts.T).T
-                    self._corevds[ds_key]['coreVectors'][lk][bn*bs:bn*bs+n_act] = phs
+                    data['coreVectors'][lk] = phs
 
     return        

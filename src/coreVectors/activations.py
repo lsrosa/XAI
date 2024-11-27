@@ -8,13 +8,13 @@ from tensordict import MemoryMappedTensor as MMT
 from torch.utils.data import DataLoader
 
 def get_activations(self, **kwargs):
+    self.check_uncontexted()
     model = self._model
-    device = model.device 
+    device = self.device 
     hooks = model.get_hooks()
 
     bs = kwargs['batch_size'] if 'batch_size' in kwargs else 64
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
-    n_threads = kwargs['n_threads'] if 'n_threads' in kwargs else 32
 
     if not self._corevds:
         raise RuntimeError('No data found. Please run get_coreVec_dataset() first.')
@@ -28,29 +28,32 @@ def get_activations(self, **kwargs):
         # pre-allocate predictions, results, activations
         #------------------------------------------------
         _td = self._corevds[ds_key]
-        _td.unlock_()
 
         # check if in and out activations exist
         if model._si and (not ('in_activations' in _td)):
             if verbose: print('adding in act tensorDict')
             _td['in_activations'] = TensorDict(batch_size=n_samples)
         elif verbose: print('In activations exist.')
+        if 'in_activations' in _td: _td['in_activations'].batch_size = torch.Size((n_samples,)) 
 
         if model._so and (not ('out_activations' in _td)):
             if verbose: print('adding out act tensorDict')
             _td['out_activations'] = TensorDict(batch_size=n_samples)
         elif verbose: print('Out activations exist.')
+        if 'out_activations' in _td: _td['out_activations'].batch_size = torch.Size((n_samples,)) 
         
         # check if layer in and out activations exist
         _layers_to_save = []
         for lk in model.get_target_layers():
-            # this set if there are layers to prevent double entries 
+            # prevents double entries 
             _lts = None
 
             # allocate for input activations 
             if model._si and (not (lk in _td['in_activations'])):
                 if verbose: print('allocating in act layer: ', lk)
+                # Seems like when loading from memory the batch size gets overwritten with all dims, so we over-overwrite it.
                 act_shape = hooks[lk].in_shape
+                print('bss: ', _td.batch_size, _td['in_activations'].batch_size)
                 _td['in_activations'][lk] = MMT.empty(shape=torch.Size((n_samples,)+act_shape))
                 _lts = lk
 
@@ -65,8 +68,7 @@ def get_activations(self, **kwargs):
         
         if verbose: print('Layers to save: ', _layers_to_save)
         if len(_layers_to_save) == 0:
-            self._corevds[ds_key].lock_()
-            print(f'No new activations for {ds_key}, skipping')
+            if verbose: print(f'No new activations for {ds_key}, skipping')
             continue
         
         # to check if pred and results data exist 
@@ -77,12 +79,6 @@ def get_activations(self, **kwargs):
             _td['pred'] = MMT.empty(shape=torch.Size((n_samples,)))
             _td['result'] = MMT.empty(shape=torch.Size((n_samples,)))
         
-        #-----------------------------------
-        # Saving allocation to memory
-        #-----------------------------------
-        if verbose: print(f'Saving {ds_key} to {file_path}.')
-        self._corevds[ds_key] = _td.memmap_like(file_path, num_threads=n_threads)
-
         # ---------------------------------------
         # compute predictions and get activations
         # ---------------------------------------
@@ -91,24 +87,22 @@ def get_activations(self, **kwargs):
         _dl = DataLoader(self._corevds[ds_key], batch_size=bs, collate_fn = lambda x: x, shuffle=False) 
         
         if verbose: print('Computing activations')
-        for bn, data in enumerate(tqdm(_dl, disable=not verbose)):
-            n_in = data['image'].shape[0]
-            imgs = data['image'].contiguous().to(device)
+        
+        for data in tqdm(_dl, disable=not verbose, total=len(_dl)):
             with torch.no_grad():
-                y_predicted = model(imgs)
+                y_predicted = model(data['image'])
             
             # do not save predictions and results if it is already there
             if not has_pred:
-                predicted_labels = y_predicted.argmax(axis = 1).detach().cpu()
-                results = predicted_labels == data['label']
-                self._corevds[ds_key]['pred'][bn*bs:bn*bs+n_in] = predicted_labels
-                self._corevds[ds_key]['result'][bn*bs:bn*bs+n_in] = results
+                predicted_labels = y_predicted.argmax(axis = 1)
+                data['pred'] = predicted_labels
+                data['result'] = predicted_labels == data['label']
             
             for lk in _layers_to_save:
                 if model._si:
-                    self._corevds[ds_key]['in_activations'][lk][bn*bs:bn*bs+n_in] = hooks[lk].in_activations
-                if model._so:
-                    self._corevds[ds_key]['out_activations'][lk][bn*bs:bn*bs+n_in] = hooks[lk].out_activations
+                    data['in_activations'][lk] = hooks[lk].in_activations[:]
 
+                if model._so:
+                    data['out_activations'][lk] = hooks[lk].out_activations[:]
     return 
 
