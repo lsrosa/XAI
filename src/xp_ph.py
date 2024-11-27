@@ -76,9 +76,12 @@ if __name__ == "__main__":
     model = ModelWrap(device=device)
     model.set_model(model=nn, path=model_dir, name=model_name, verbose=verbose)
 
-    layers_dict = {'classifier': [0, 3]}#,
-                   #'features': [28]}
-    model.set_target_layers(target_layers=layers_dict, verbose=verbose)
+    target_layers = [
+            'classifier.0',
+            'classifier.3',
+            #'features.28'
+            ]
+    model.set_target_layers(target_layers=target_layers, verbose=verbose)
 
     direction = {'save_input':True, 'save_output':False}
     model.add_hooks(**direction, verbose=False) 

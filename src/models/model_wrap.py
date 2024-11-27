@@ -139,7 +139,7 @@ class ModelWrap(metaclass=abc.ABCMeta):
         Args:
         - key_list (list): list of filtered keys from the state dict
         '''
-        key_list = kwargs['key_list']
+        key_list = kwargs['target_layers']
 
         _dict = {}
 
