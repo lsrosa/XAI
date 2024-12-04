@@ -7,12 +7,6 @@ from tensordict import MemoryMappedTensor as MMT
 from pathlib import Path as Path
 import abc 
 
-def fds(data, key):
-    if key == 'image':
-        return data[0]
-    if key == 'label':
-        return data[1]
-        
 def ftd(data, key):
     return data[key]
 

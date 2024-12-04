@@ -22,13 +22,14 @@ class CoreVectors():
         self._model = kwargs['model'] if 'model' in kwargs else None  
         self.device = kwargs['device'] if 'device' in kwargs else 'cpu'  
 
-        # computed in get_activations()
-        self._loaders = None
-
         # computed in get_coreVec_dataset()
-        self._corevds = {}
-        self._n_samples = None
-        self._file_paths = None
+        self._cvs_file_paths = {} 
+        self._n_samples = {} 
+        self._corevds = {} # filled in get_coreVectors()
+
+        # computed in get_activations()
+        self._act_file_paths = {} 
+        self._actds = {}
         
         # set in normalize_corevectors() 
         self._norm_wrt = None
@@ -39,10 +40,14 @@ class CoreVectors():
         # Set on __enter__() and __exit__()
         # read before each function
         self._is_contexted = False
+
+        # computed in get_dataloaders()
+        self._loaders = {}
         return
      
     def normalize_corevectors(self, **kwargs):
         self.check_uncontexted()
+
         wrt = kwargs['wrt']
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
         bs = kwargs['batch_size'] if 'batch_size' in kwargs else 64 
@@ -82,7 +87,7 @@ class CoreVectors():
         means = self._corevds[wrt]['coreVectors'].mean(dim=0)
         stds = self._corevds[wrt]['coreVectors'].std(dim=0)
 
-        # TODO: It is a bit excessive to renormalize all layers again (including the ones already normalized). Gotta change the logic to normalize only the ones in `layers_to_norm` 
+        # TODO: It is excessive to renormalize all layers again (including the ones already normalized). Gotta change the logic to normalize only the ones in `layers_to_norm` 
         for ds_key in self._corevds:
             if verbose: print(f'\n ---- Normalizing core vectors for {ds_key}\n')
             td = self._corevds[ds_key]['coreVectors']  
@@ -118,7 +123,7 @@ class CoreVectors():
             if verbose: print('Loaders exist. Returning existing ones.')
             return self._loaders
 
-        # Create dataloader for each coreV TensorDicts 
+        # Create dataloader for each corevecs TensorDicts 
         _loaders = {}
         for ds_key in self._corevds:
             if verbose: print('creating dataloader for: ', ds_key)
@@ -137,20 +142,16 @@ class CoreVectors():
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         loaders = kwargs['loaders']
 
-        _corevds = {}
-        _n_samples = {}
-        _file_paths = {}
-
-        for loader_name in loaders:
-            if verbose: print(f'\n ---- Getting data from {loader_name}\n')
-            file_path = self.path/(self.name.name+'.'+loader_name)
-            _file_paths[loader_name] = file_path
+        for ds_key in loaders:
+            if verbose: print(f'\n ---- Getting data from {ds_key}\n')
+            file_path = self.path/(self.name.name+'.'+ds_key)
+            self._cvs_file_paths[ds_key] = file_path
             
             if verbose: print(f'File {file_path} exists. Loading from disk.')
-            _corevds[loader_name] = PersistentTensorDict.from_h5(file_path, mode='r').to(self.device)
+            self._corevds[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r').to(self.device)
 
-            n_samples = len(_corevds[loader_name])
-            if verbose: print('loaded n_samples: ', n_samples)
+            self._n_samples[ds_key] = len(self._corevds[ds_key])
+            if verbose: print('loaded n_samples: ', self._n_samples[ds_key])
         
         norm_file_path = self.path/(self.name.name+'.normalization')
         if norm_file_path.exists():
@@ -164,11 +165,6 @@ class CoreVectors():
         else:
             if verbose: print('No normalization info found')
 
-        # save computed data within the class
-        self._file_paths = _file_paths
-        self._n_samples = _n_samples
-        self._corevds = _corevds
-
         return
     
     def __enter__(self):
@@ -179,13 +175,19 @@ class CoreVectors():
         verbose = True 
 
         if self._corevds == None:
-            if verbose: print('no corevds to close. doing nothing.')
-            return
-
-        for loader_name in self._corevds:
-            if verbose: print(f'closing {loader_name}')
-            self._corevds[loader_name].close()
+            if verbose: print('no corevds to close.')
+        else:
+            for ds_key in self._corevds:
+                if verbose: print(f'closing {ds_key}')
+                self._corevds[ds_key].close()
             
+        if self._actds == None:
+            if verbose: print('no actds to close.')
+        else:
+            for ds_key in self._actds:
+                if verbose: print(f'closing {ds_key}')
+                self._actds[ds_key].close()
+
         self._is_contexted = False 
         return
 

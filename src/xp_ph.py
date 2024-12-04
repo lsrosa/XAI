@@ -14,12 +14,13 @@ from classifier.gmm import GMM
 from classifier.tkmeans import KMeans as tKMeans 
 from classifier.tgmm import GMM as tGMM 
 from peepholes.peepholes import Peepholes
+from utils.testing import trim_dataloaders
 
 # torch stuff
 import torch
 from torchvision.models import vgg16, VGG16_Weights
 from cuda_selector import auto_cuda
-from torch.utils.data import random_split, DataLoader
+
 
 if __name__ == "__main__":
     use_cuda = torch.cuda.is_available()
@@ -35,10 +36,10 @@ if __name__ == "__main__":
     pretrained = True
     dataset = 'CIFAR100' 
     seed = 29
-    bs = 64
+    bs = 512 
     model_dir = '/srv/newpenny/XAI/models'
     model_name = f'vgg16_pretrained={pretrained}_dataset={dataset}-'\
-    f'augmented_policy=CIFAR10_bs={bs}_seed={seed}.pth'
+    f'augmented_policy=CIFAR10_bs=64_seed={seed}.pth'
     
     svds_name = 'svds' 
     svds_path = Path.cwd()/'../data'
@@ -60,7 +61,7 @@ if __name__ == "__main__":
             dataset=dataset
             )
     ds.load_data(
-            batch_size = 512,
+            batch_size = bs,
             data_kwargs = {'num_workers': 4, 'pin_memory': True},
             seed = seed,
             )
@@ -103,7 +104,8 @@ if __name__ == "__main__":
     # CoreVectors 
     #--------------------------------
     ds_loaders = ds.get_dataset_loaders()
-
+    #ds_loaders = trim_dataloaders(ds.get_dataset_loaders(), 0.1)
+    
     corevecs = CoreVectors(
             path = cvs_path,
             name = cvs_name,
@@ -119,16 +121,18 @@ if __name__ == "__main__":
                 ) 
 
         cv.get_activations(
-                batch_size = 512,
+                batch_size = bs,
                 loaders = ds_loaders,
                 verbose = verbose
                 )
+
         cv.get_coreVectors(
-                batch_size = 512,
+                batch_size = bs,
                 reduct_matrices = model._svds,
                 parser = parser_fn,
                 verbose = verbose
                 )
+
         cv_dl = cv.get_dataloaders(verbose=verbose)
     
         i = 0
@@ -185,8 +189,8 @@ if __name__ == "__main__":
                 ) 
 
         cv_dl = cv.get_dataloaders(
-                batch_size=512,
-                verbose=True,
+                batch_size = bs,
+                verbose = True,
                 )
     
         t0 = time()
@@ -201,7 +205,7 @@ if __name__ == "__main__":
                 )
 
         ph.get_scores(
-            batch_size = 512,
+            batch_size = bs,
             verbose=verbose
             )
 
