@@ -103,8 +103,8 @@ if __name__ == "__main__":
     #--------------------------------
     # CoreVectors 
     #--------------------------------
-    #ds_loaders = ds.get_dataset_loaders()
-    ds_loaders = trim_dataloaders(ds.get_dataset_loaders(), 0.05)
+    ds_loaders = ds.get_dataset_loaders()
+    #ds_loaders = trim_dataloaders(ds.get_dataset_loaders(), 0.05)
     
     corevecs = CoreVectors(
             path = cvs_path,
@@ -151,7 +151,7 @@ if __name__ == "__main__":
             print(data['coreVectors']['classifier.0'][34:56,:])
             i += 1
             if i == 3: break
-
+    quit()
     #--------------------------------
     # Peepholes
     #--------------------------------
@@ -220,7 +220,6 @@ if __name__ == "__main__":
             if i == 3: break
 
         ph.evaluate_dists(
-                layer = 'classifier.0',
                 score_type = 'max',
                 coreVectors = cv_dl,
                 bins = 20

@@ -112,7 +112,7 @@ def peephole_wrap(config, **kwargs):
         checkpoint = Checkpoint.from_directory(checkpoint_dir)
         train.report({
             "cok": cok,
-            'cko': cok,
+            'cko': cko,
             },
             checkpoint=checkpoint
         )
