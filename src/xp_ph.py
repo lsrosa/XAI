@@ -222,5 +222,6 @@ if __name__ == "__main__":
         ph.evaluate_dists(
                 layer = 'classifier.0',
                 score_type = 'max',
-                coreVectors = cv_dl
+                coreVectors = cv_dl,
+                bins = 20
                 )

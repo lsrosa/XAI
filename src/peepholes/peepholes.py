@@ -171,15 +171,19 @@ class Peepholes:
     
     def evaluate_dists(self, **kwargs):
         self.check_uncontexted()
-        
+         
         layer = self.layer 
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
         cv_dls = kwargs['coreVectors']
         score_type = kwargs['score_type']
+        bins = kwargs['bins'] if 'bins' in kwargs else 100
 
         print('\n-------------\nEvaluating Distributions\n-------------\n') 
+        
+        n_dss = len(self._phs.keys())
+        fig, axs = plt.subplots(1, n_dss, sharex='all', sharey='all', figsize=(4, 4*n_dss))
 
-        for ds_key in self._phs:
+        for i, ds_key in enumerate(self._phs.keys()):
             if verbose: print('Evaluating {ds_key}')
             results = cv_dls[ds_key].dataset['result']
             scores = self._phs[ds_key][layer]['score_'+score_type]
@@ -192,17 +196,18 @@ class Peepholes:
 
             #--------------- 
             # plotting
-            #--------------- 
+            #---------------
+            ax = axs[i]
             coks = ['ok' for x in oks]
             ckos = ['ko' for x in kos]
             df = DataFrame({
                 'score': np.hstack((oks, kos)),
                 'class': np.hstack((coks, ckos))
                 }) 
-            plt.figure()
-            sb.histplot(data=df, bins=100, x='score', hue='class')
-            plt.savefig((self.path/self.name).as_posix()+'.'+ds_key+'.png', dpi=300, bbox_inches='tight')
-            plt.close()
+            sb.histplot(data=df, ax=ax, bins=100, x='score', hue='class')
+
+        plt.savefig((self.path/self.name).as_posix()+'.png', dpi=300, bbox_inches='tight')
+        plt.close()
         return m_ok, s_ok, m_ko, s_ko
 
     def evaluate(self, **kwargs): 
