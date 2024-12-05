@@ -29,14 +29,14 @@ def get_coreVec_dataset(self, **kwargs):
         
         if file_path.exists():
             if verbose: print(f'File {file_path} exists. Loading from disk.')
-            self._corevds[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r+').to(self.device)
+            self._corevds[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r+')
 
             n_samples = len(self._corevds[ds_key])
             if verbose: print('loaded n_samples: ', n_samples)
         else:
             n_samples = len(loaders[ds_key].dataset)
             if verbose: print('loader n_samples: ', n_samples) 
-            self._corevds[ds_key] = PersistentTensorDict(filename=file_path, batch_size=[n_samples], device=self.device, mode='w')
+            self._corevds[ds_key] = PersistentTensorDict(filename=file_path, batch_size=[n_samples], mode='w')
             
             #------------------------
             # copy images and labels

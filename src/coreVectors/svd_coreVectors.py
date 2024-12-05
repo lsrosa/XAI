@@ -16,7 +16,7 @@ def get_coreVectors(self, **kwargs):
     self.check_uncontexted()
     
     model = self._model 
-    device = model.device 
+    device = self._model.device 
     normalize_wrt = kwargs['normalize_wrt'] if 'normalize_wrt' in kwargs else None 
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False
 
@@ -82,10 +82,10 @@ def get_coreVectors(self, **kwargs):
                     n_act = act_data['in_activations'][lk].shape[0]
                     acts = act_data['in_activations'][lk]
                     acts_flat = acts.flatten(start_dim=1)
-                    ones = torch.ones(n_act, 1).to(device)
-                    _acts = torch.hstack((acts_flat, ones))
+                    ones = torch.ones(n_act, 1)
+                    _acts = torch.hstack((acts_flat, ones)).to(device)
                     phs = (reduct_m@_acts.T).T
-                    cvs_data['coreVectors'][lk] = phs
+                    cvs_data['coreVectors'][lk] = phs.cpu()
             if isinstance(layer, torch.nn.Conv2d):
                 pad_mode = layer.padding_mode if layer.padding_mode != 'zeros' else 'constant'
                 padding = _reverse_repeat_tuple(layer.padding, 2) 
@@ -95,9 +95,9 @@ def get_coreVectors(self, **kwargs):
                     acts_pad = pad(acts, pad=padding, mode=pad_mode)
 
                     acts_flat = acts_pad.flatten(start_dim=1)
-                    ones = torch.ones(n_act, 1).to(device)
-                    _acts = torch.hstack((acts_flat, ones))
+                    ones = torch.ones(n_act, 1)
+                    _acts = torch.hstack((acts_flat, ones)).to(device)
                     phs = (reduct_m@_acts.T).T
-                    cvs_data['coreVectors'][lk] = phs
+                    cvs_data['coreVectors'][lk] = phs.cpu()
 
     return        

@@ -9,8 +9,6 @@ from models.model_wrap import ModelWrap
 from coreVectors.coreVectors import CoreVectors 
 from coreVectors.svd_coreVectors import reduct_matrices_from_svds as parser_fn
 from classifier.classifier_base import trim_corevectors
-from classifier.kmeans import KMeans 
-from classifier.gmm import GMM 
 from classifier.tkmeans import KMeans as tKMeans 
 from classifier.tgmm import GMM as tGMM 
 from peepholes.peepholes import Peepholes
@@ -80,7 +78,9 @@ if __name__ == "__main__":
     target_layers = [
             'classifier.0',
             'classifier.3',
-            #'features.28'
+            'features.7',
+            'features.14',
+            'features.28',
             ]
     model.set_target_layers(target_layers=target_layers, verbose=verbose)
 
@@ -104,13 +104,12 @@ if __name__ == "__main__":
     # CoreVectors 
     #--------------------------------
     ds_loaders = ds.get_dataset_loaders()
-    #ds_loaders = trim_dataloaders(ds.get_dataset_loaders(), 0.1)
+    #ds_loaders = trim_dataloaders(ds.get_dataset_loaders(), 0.05)
     
     corevecs = CoreVectors(
             path = cvs_path,
             name = cvs_name,
             model = model,
-            device = device
             )
 
     with corevecs as cv: 
@@ -137,17 +136,18 @@ if __name__ == "__main__":
     
         i = 0
         print('\nPrinting some corevecs')
-        for data in cv_dl['test']:
-            print(data['coreVectors']['classifier.0'])
+        for data in cv_dl['train']:
+            print(data['coreVectors']['classifier.0'][34:56,:])
             i += 1
             if i == 3: break
 
         cv.normalize_corevectors(
-                wrt='test',
+                wrt='train',
                 verbose=verbose
                 )
         i = 0
-        for data in cv_dl['test']:
+        print('after norm')
+        for data in cv_dl['train']:
             print(data['coreVectors']['classifier.0'][34:56,:])
             i += 1
             if i == 3: break
@@ -155,12 +155,13 @@ if __name__ == "__main__":
     #--------------------------------
     # Peepholes
     #--------------------------------
-    n_classes = 300
+    n_classes = 100
     parser_cv = trim_corevectors
-    parser_kwargs = {'layer': 'classifier.0', 'peep_size':300}
+    peep_layer = 'features.7'
+    parser_kwargs = {'layer': peep_layer, 'peep_size':100}
     cls_kwargs = {}#{'batch_size':256} 
     cls = tGMM(
-            nl_classifier = 300,
+            nl_classifier = 100,
             nl_model = n_classes,
             parser = parser_cv,
             parser_kwargs = parser_kwargs,
@@ -171,14 +172,13 @@ if __name__ == "__main__":
     corevecs = CoreVectors(
             path = cvs_path,
             name = cvs_name,
-            device = device 
             )
     
     peepholes = Peepholes(
             path = phs_path,
-            name = phs_name,
+            name = phs_name+'.'+peep_layer,
             classifier = cls,
-            layer = 'classifier.0',
+            layer = peep_layer,
             device = device
             )
 
@@ -194,7 +194,7 @@ if __name__ == "__main__":
                 )
     
         t0 = time()
-        cls.fit(dataloader = cv_dl['test'], verbose=verbose)
+        cls.fit(dataloader = cv_dl['train'], verbose=verbose)
         print('Fitting time = ', time()-t0)
         
         cls.compute_empirical_posteriors(verbose=verbose)
@@ -212,15 +212,15 @@ if __name__ == "__main__":
         i = 0
         print('\nPrinting some peeps')
         ph_dl = ph.get_dataloaders(verbose=verbose)
-        for data in ph_dl['val']:
-            print('phs\n', data['classifier.0']['peepholes'])
-            print('max\n', data['classifier.0']['score_max'])
-            print('ent\n', data['classifier.0']['score_entropy'])
+        for data in ph_dl['test']:
+            print('phs\n', data[peep_layer]['peepholes'])
+            print('max\n', data[peep_layer]['score_max'])
+            print('ent\n', data[peep_layer]['score_entropy'])
             i += 1
             if i == 3: break
 
-        ph.evaluate(
-                layer = 'classifier.0',
+        ph.evaluate_dists(
                 score_type = 'max',
-                coreVectors = cv_dl
+                coreVectors = cv_dl,
+                bins = 20
                 )

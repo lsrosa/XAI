@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 def get_activations(self, **kwargs):
     self.check_uncontexted()
     model = self._model
-    device = self.device 
+    device = self._model.device 
     hooks = model.get_hooks()
 
     bs = kwargs['batch_size'] if 'batch_size' in kwargs else 64
@@ -27,11 +27,11 @@ def get_activations(self, **kwargs):
 
         if file_path.exists():
             if verbose: print(f'File {file_path} exists. Loading from disk.')
-            self._actds[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r+').to(self.device)
+            self._actds[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r+')
             if verbose: print(f'loaded {file_path}')
         else:
             if verbose: print(f'creating {file_path}') 
-            self._actds[ds_key] = PersistentTensorDict(filename=file_path, batch_size=[n_samples], device=self.device, mode='w')
+            self._actds[ds_key] = PersistentTensorDict(filename=file_path, batch_size=[n_samples], mode='w')
 
         #------------------------------------------------
         # pre-allocate predictions, results, activations
@@ -100,19 +100,19 @@ def get_activations(self, **kwargs):
         
         for cvs_data, act_data in tqdm(zip(cvs_dl, act_dl), disable=not verbose, total=len(cvs_dl)):
             with torch.no_grad():
-                y_predicted = model(cvs_data['image'])
+                y_predicted = model(cvs_data['image'].to(device))
             
             # do not save predictions and results if it is already there
             if not has_pred:
-                predicted_labels = y_predicted.argmax(axis = 1)
+                predicted_labels = y_predicted.argmax(axis = 1).cpu()
                 cvs_data['pred'] = predicted_labels
                 cvs_data['result'] = predicted_labels == cvs_data['label']
             
             for lk in _layers_to_save:
                 if model._si:
-                    act_data['in_activations'][lk] = hooks[lk].in_activations[:]
+                    act_data['in_activations'][lk] = hooks[lk].in_activations[:].cpu()
 
                 if model._so:
-                    act_data['out_activations'][lk] = hooks[lk].out_activations[:]
+                    act_data['out_activations'][lk] = hooks[lk].out_activations[:].cpu()
     return 
 

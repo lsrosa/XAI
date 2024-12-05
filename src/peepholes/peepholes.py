@@ -2,8 +2,12 @@
 from pathlib import Path
 from tqdm import tqdm
 from collections import Counter
-from matplotlib import pyplot as plt
 import numpy as np
+
+# plotting stuff
+from matplotlib import pyplot as plt
+import seaborn as sb
+import pandas as pd
 
 # torch stuff
 import torch
@@ -48,24 +52,24 @@ class Peepholes:
             raise RuntimeError('No prediction probabilities. Please run classifier.compute_empirical_posteriors() first.')
         _empp = self._classifier._empp.to(self.device)
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False
-        _dls = kwargs['loaders']
+        dls = kwargs['loaders']
 
         layer = self.layer 
 
-        for ds_key in _dls:
-            bs = _dls[ds_key].batch_size
+        for ds_key in dls:
+            bs = dls[ds_key].batch_size
             if verbose: print(f'\n ---- Getting peepholes for {ds_key}\n')
             file_path = self.path/(self.name.name+'.'+ds_key)
            
             if file_path.exists():
                 if verbose: print(f'File {file_path} exists. Loading from disk.')
-                self._phs[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r+').to(self.device)
+                self._phs[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r+')
                 n_samples = len(self._phs[ds_key])
                 if verbose: print('loaded n_samples: ', n_samples)
             else:
-                n_samples = len(_dls[ds_key].dataset)
+                n_samples = len(dls[ds_key].dataset)
                 if verbose: print('loader n_samples: ', n_samples) 
-                self._phs[ds_key] = PersistentTensorDict(filename=file_path, batch_size=[n_samples], device=self.device, mode='w')
+                self._phs[ds_key] = PersistentTensorDict(filename=file_path, batch_size=[n_samples], mode='w')
             
             #-----------------------------------------
             # Pre-allocate peepholes
@@ -79,13 +83,13 @@ class Peepholes:
                 # computing peepholes
                 #-----------------------------------------
                 if verbose: print('\n ---- computing peepholes \n')
-                _dl_t = DataLoader(self._phs[ds_key], batch_size=bs, collate_fn=lambda x:x)
-                for batch in tqdm(zip(_dls[ds_key], _dl_t), disable=not verbose, total=len(_dl_t)):
+                dl_t = DataLoader(self._phs[ds_key], batch_size=bs, collate_fn=lambda x:x)
+                for batch in tqdm(zip(dls[ds_key], dl_t), disable=not verbose, total=len(dl_t)):
                     data_in, data_t = batch
                     cp = self._classifier.classifier_probabilities(batch=data_in, verbose=verbose).to(self.device)
-                    _lp = cp@_empp
-                    _lp /= _lp.sum(dim=1, keepdim=True)
-                    data_t[layer]['peepholes'] = _lp
+                    lp = cp@_empp
+                    lp /= lp.sum(dim=1, keepdim=True)
+                    data_t[layer]['peepholes'] = lp.cpu()
             else:
                 if verbose: print('Peepholes for {layer} already present. Skipping.')
         return 
@@ -161,9 +165,63 @@ class Peepholes:
             file_path = self.path/(self.name.name+'.'+ds_key)
            
             if verbose: print(f'File {file_path} exists. Loading from disk.')
-            _phs[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r').to(self.device)
+            self._phs[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r')
         
         return
+    
+    def evaluate_dists(self, **kwargs):
+        self.check_uncontexted()
+         
+        layer = self.layer 
+        verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
+        cv_dls = kwargs['coreVectors']
+        score_type = kwargs['score_type']
+        bins = kwargs['bins'] if 'bins' in kwargs else 100
+
+        print('\n-------------\nEvaluating Distributions\n-------------\n') 
+        
+        n_dss = len(self._phs.keys())
+        fig, axs = plt.subplots(1, n_dss+1, sharex='all', sharey='all', figsize=(4*(1+n_dss), 4))
+        
+        m_ok, s_ok, m_ko, s_ko = {}, {}, {}, {}
+
+        for i, ds_key in enumerate(self._phs.keys()):
+            if verbose: print('Evaluating {ds_key}')
+            results = cv_dls[ds_key].dataset['result']
+            scores = self._phs[ds_key][layer]['score_'+score_type]
+            oks = (scores[results == True]).detach().cpu().numpy()
+            kos = (scores[results == False]).detach().cpu().numpy()
+
+            m_ok[ds_key], s_ok[ds_key] = oks.mean(), oks.std()
+            m_ko[ds_key], s_ko[ds_key] = kos.mean(), kos.std()
+
+
+            #--------------- 
+            # plotting
+            #---------------
+            ax = axs[i+1]
+            sb.histplot(data=pd.DataFrame({'score': oks}), ax=ax, bins=bins, x='score', stat='density', label='ok n=%d'%len(oks), alpha=0.5)
+            sb.histplot(data=pd.DataFrame({'score': kos}), ax=ax, bins=bins, x='score', stat='density', label='ko n=%d'%len(kos), alpha=0.5)
+            ax.set_xlabel('score: '+score_type)
+            ax.set_ylabel('%')
+            ax.title.set_text(ds_key)
+            ax.legend(title='dist')
+        
+        # plot train and test distributions
+        ax = axs[0]
+        scores = self._phs['train'][layer]['score_'+score_type].detach().cpu().numpy()
+        sb.histplot(data=pd.DataFrame({'score': scores}), ax=ax, bins=bins, x='score', stat='density', label='train n=%d'%len(scores), alpha=0.5)
+        scores = self._phs['val'][layer]['score_'+score_type].detach().cpu().numpy()
+        sb.histplot(data=pd.DataFrame({'score': scores}), ax=ax, bins=bins, x='score', stat='density', label='val n=%d'%len(scores), alpha=0.5)
+        ax.set_ylabel('%')
+        ax.set_xlabel('score: '+score_type)
+        ax.legend(title='datasets')
+
+        plt.savefig((self.path/self.name).as_posix()+'.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+        if verbose: print('oks mean, std, n: ', m_ok, s_ok, len(oks), '\nkos, mean, std, n', m_ko, s_ko, len(kos))
+        return m_ok, s_ok, m_ko, s_ko
 
     def evaluate(self, **kwargs): 
         self.check_uncontexted()

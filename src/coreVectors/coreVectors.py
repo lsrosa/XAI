@@ -20,7 +20,6 @@ class CoreVectors():
         self.path.mkdir(parents=True, exist_ok=True)
 
         self._model = kwargs['model'] if 'model' in kwargs else None  
-        self.device = kwargs['device'] if 'device' in kwargs else 'cpu'  
 
         # computed in get_coreVec_dataset()
         self._cvs_file_paths = {} 
@@ -75,7 +74,7 @@ class CoreVectors():
                 if not lk in is_normed[ds_key]:
                     layers_to_norm[ds_key].append(lk)
                     cnt += 1
-        print('Layers to norm: ', layers_to_norm)
+        if verbose: print('Layers to norm: ', layers_to_norm)
 
         if cnt == 0:
             if verbose: print('All corevectors seems to be normalized. Doing nothing')
@@ -90,14 +89,12 @@ class CoreVectors():
         # TODO: It is excessive to renormalize all layers again (including the ones already normalized). Gotta change the logic to normalize only the ones in `layers_to_norm` 
         for ds_key in self._corevds:
             if verbose: print(f'\n ---- Normalizing core vectors for {ds_key}\n')
-            td = self._corevds[ds_key]['coreVectors']  
-            dl = DataLoader(td, batch_size=bs, collate_fn=lambda x: x)
+            dl = DataLoader(self._corevds[ds_key], batch_size=bs, collate_fn=lambda x: x)
+            
             for batch in tqdm(dl, disable=not verbose, total=len(dl)):
-                n_in = len(batch) 
-                batch = (batch - means)/stds
+                batch['coreVectors'] = (batch['coreVectors'] - means)/stds
 
             is_normed[ds_key] = list(set(layers_to_norm[ds_key]).union(is_normed[ds_key])) 
-        print('is normed: ', is_normed)
 
         if not file_path.exists(): torch.save((means, stds, is_normed, wrt), file_path)
         self._norm_mean = means
@@ -148,7 +145,7 @@ class CoreVectors():
             self._cvs_file_paths[ds_key] = file_path
             
             if verbose: print(f'File {file_path} exists. Loading from disk.')
-            self._corevds[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r').to(self.device)
+            self._corevds[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r')
 
             self._n_samples[ds_key] = len(self._corevds[ds_key])
             if verbose: print('loaded n_samples: ', self._n_samples[ds_key])
