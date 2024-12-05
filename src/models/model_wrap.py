@@ -29,9 +29,12 @@ class Hook:
         
         self.layer = layer
         self.handle = layer.register_forward_hook(self)
+        # print('LAYER ==', self.layer)
+        # print('self handle = ',self.handle)
         return self.handle
     
     def set_shapes(self):
+        # print('LAYER = ', self.layer)
         if self._si:
             self.in_shape = self.in_activations.shape[1:]
         if self._so:
@@ -40,9 +43,15 @@ class Hook:
         return
 
     def __call__(self, module, module_in, module_out):
-        if self._si: 
+        
+        #print('SELF SI = ', self._si)
+        if self._si:
+            # print('ACTIVATION = ', self.in_activations)
+            # print('MODULE SHAPE = ', module_in[0].shape) 
+            # print('SHAPE = ', self.in_activations.shape)
             if self.in_activations == None or module_in[0].shape != self.in_activations.shape:
                 self.in_activations = module_in[0]
+                # print('MODULE IN = ', module_in[0])
             else:
                 self.in_activations[:] = module_in[0][:]
 
@@ -137,7 +146,7 @@ class ModelWrap(metaclass=abc.ABCMeta):
         Set the variable target_layers as a dictionary: the keys are the name of the layers (string) from the state_dict, the values are layers
    
         Args:
-        - key_list (list): list of filtered keys from the state dict
+        - target_layers (list): list of filtered keys from the state dict
         '''
         key_list = kwargs['target_layers']
 
