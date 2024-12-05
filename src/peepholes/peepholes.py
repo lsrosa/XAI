@@ -227,7 +227,7 @@ class Peepholes:
         ax.set_ylabel('%')
         ax.set_xlabel(score_type)
 
-        plt.savefig((self.path/self.name).as_posix()+f'.{score_type}.png', dpi=300, bbox_inches='tight')
+        plt.savefig((self.path/self.name).as_posix()+'.png', dpi=300, bbox_inches='tight')
         plt.close()
 
         if verbose: print('oks mean, std, n: ', m_ok, s_ok, len(oks), '\nkos, mean, std, n', m_ko, s_ko, len(kos))
