@@ -200,9 +200,9 @@ class Peepholes:
             # plotting
             #---------------
             ax = axs[i+1]
-            sb.histplot(data=pd.DataFrame({'score': oks}), ax=ax, bins=bins, x='score', stat='density', label='ok', alpha=0.5)
-            sb.histplot(data=pd.DataFrame({'score': kos}), ax=ax, bins=bins, x='score', stat='density', label='ko', alpha=0.5)
-            ax.set_xlabel(score_type)
+            sb.histplot(data=pd.DataFrame({'score': oks}), ax=ax, bins=bins, x='score', stat='density', label='ok n=%d'%len(oks), alpha=0.5)
+            sb.histplot(data=pd.DataFrame({'score': kos}), ax=ax, bins=bins, x='score', stat='density', label='ko n=%d'%len(kos), alpha=0.5)
+            ax.set_xlabel('score: '+score_type)
             ax.set_ylabel('%')
             ax.title.set_text(ds_key)
             ax.legend(title='dist')
@@ -210,11 +210,11 @@ class Peepholes:
         # plot train and test distributions
         ax = axs[0]
         scores = self._phs['train'][layer]['score_'+score_type].detach().cpu().numpy()
-        sb.histplot(data=pd.DataFrame({'score': scores}), ax=ax, bins=bins, x='score', stat='density', label='train', alpha=0.5)
+        sb.histplot(data=pd.DataFrame({'score': scores}), ax=ax, bins=bins, x='score', stat='density', label='train n=%d'%len(scores), alpha=0.5)
         scores = self._phs['val'][layer]['score_'+score_type].detach().cpu().numpy()
-        sb.histplot(data=pd.DataFrame({'score': scores}), ax=ax, bins=bins, x='score', stat='density', label='val', alpha=0.5)
+        sb.histplot(data=pd.DataFrame({'score': scores}), ax=ax, bins=bins, x='score', stat='density', label='val n=%d'%len(scores), alpha=0.5)
         ax.set_ylabel('%')
-        ax.set_xlabel(score_type)
+        ax.set_xlabel('score: '+score_type)
         ax.legend(title='datasets')
 
         plt.savefig((self.path/self.name).as_posix()+'.png', dpi=300, bbox_inches='tight')
