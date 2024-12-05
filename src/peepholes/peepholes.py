@@ -205,7 +205,7 @@ class Peepholes:
             ax.set_xlabel(score_type)
             ax.set_ylabel('%')
             ax.title.set_text(ds_key)
-            plt.legend(title='dist')
+            ax.legend(title='dist')
         
         # plot train and test distributions
         ax = axs[0]
@@ -215,7 +215,8 @@ class Peepholes:
         sb.histplot(data=pd.DataFrame({'score': scores}), ax=ax, bins=bins, x='score', stat='density', label='val', alpha=0.5)
         ax.set_ylabel('%')
         ax.set_xlabel(score_type)
-        plt.legend(title='datasets')
+        ax.legend(title='datasets')
+
         plt.savefig((self.path/self.name).as_posix()+'.png', dpi=300, bbox_inches='tight')
         plt.close()
 
