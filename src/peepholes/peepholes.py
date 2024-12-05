@@ -7,7 +7,7 @@ import numpy as np
 # plotting stuff
 from matplotlib import pyplot as plt
 import seaborn as sb
-from pandas import DataFrame
+import pandas as pd
 
 # torch stuff
 import torch
@@ -181,7 +181,10 @@ class Peepholes:
         print('\n-------------\nEvaluating Distributions\n-------------\n') 
         
         n_dss = len(self._phs.keys())
-        fig, axs = plt.subplots(1, n_dss, sharex='all', sharey='all', figsize=(4*n_dss, 4))
+        fig, axs = plt.subplots(1, n_dss+1, sharex='all', sharey='all', figsize=(4*(1+n_dss), 4))
+        
+        m_ok, s_ok, m_ko, s_ko = {}, {}, {}, {}
+        dfs = {}
 
         for i, ds_key in enumerate(self._phs.keys()):
             if verbose: print('Evaluating {ds_key}')
@@ -190,26 +193,44 @@ class Peepholes:
             oks = (scores[results == True]).detach().cpu().numpy()
             kos = (scores[results == False]).detach().cpu().numpy()
 
-            m_ok, s_ok = oks.mean(), oks.std()
-            m_ko, s_ko = kos.mean(), kos.std()
-            if verbose: print('oks mean, std, n: ', m_ok, s_ok, len(oks), '\nkos, mean, std, n', m_ko, s_ko, len(kos))
+            m_ok[ds_key], s_ok[ds_key] = oks.mean(), oks.std()
+            m_ko[ds_key], s_ko[ds_key] = kos.mean(), kos.std()
+
+            coks = ['ok' for x in oks]
+            ckos = ['ko' for x in kos]
+            dfs[ds_key] = pd.DataFrame({
+                'score': np.hstack((oks, kos)),
+                'class': np.hstack((coks, ckos))
+                }) 
 
             #--------------- 
             # plotting
             #---------------
-            ax = axs[i]
-            coks = ['ok' for x in oks]
-            ckos = ['ko' for x in kos]
-            df = DataFrame({
-                'score': np.hstack((oks, kos)),
-                'class': np.hstack((coks, ckos))
-                }) 
-            sb.histplot(data=df, ax=ax, bins=100, x='score', hue='class', stat='percent', legend=i==0)
+            # plot oks and kos dist over val
+            ax = axs[i+1]
+            sb.histplot(data=dfs[ds_key], ax=ax, bins=bins, x='score', hue='class', stat='percent', legend=False)
             ax.set_xlabel(score_type)
             ax.set_ylabel('%')
             ax.title.set_text(ds_key)
-        plt.savefig((self.path/self.name).as_posix()+'.png', dpi=300, bbox_inches='tight')
+        
+        # plot train and test distributions
+        ax = axs[0]
+        s_train = dfs['train']['score'].values
+        c_train = ['train' for x in s_train]
+        s_val = dfs['val']['score'].values
+        c_val = ['val' for x in s_val]
+        df = pd.DataFrame({
+            'score': np.hstack((s_train, s_val)),
+            'dataset': np.hstack((c_train, c_val)) 
+            })
+        sb.histplot(data=df, ax=ax, bins=bins, x='score', hue='dataset', stat='percent', legend=True)
+        ax.set_ylabel('%')
+        ax.set_xlabel(score_type)
+
+        plt.savefig((self.path/self.name).as_posix()+f'.{score_type}.png', dpi=300, bbox_inches='tight')
         plt.close()
+
+        if verbose: print('oks mean, std, n: ', m_ok, s_ok, len(oks), '\nkos, mean, std, n', m_ko, s_ko, len(kos))
         return m_ok, s_ok, m_ko, s_ko
 
     def evaluate(self, **kwargs): 
