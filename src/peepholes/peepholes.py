@@ -181,7 +181,7 @@ class Peepholes:
         print('\n-------------\nEvaluating Distributions\n-------------\n') 
         
         n_dss = len(self._phs.keys())
-        fig, axs = plt.subplots(1, n_dss, sharex='all', sharey='all', figsize=(4, 4*n_dss))
+        fig, axs = plt.subplots(1, n_dss, sharex='all', sharey='all', figsize=(4*n_dss, 4))
 
         for i, ds_key in enumerate(self._phs.keys()):
             if verbose: print('Evaluating {ds_key}')
@@ -204,8 +204,10 @@ class Peepholes:
                 'score': np.hstack((oks, kos)),
                 'class': np.hstack((coks, ckos))
                 }) 
-            sb.histplot(data=df, ax=ax, bins=100, x='score', hue='class')
-
+            sb.histplot(data=df, ax=ax, bins=100, x='score', hue='class', stat='percent', legend=i==0)
+            ax.set_xlabel(score_type)
+            ax.set_ylabel('%')
+            ax.title.set_text(ds_key)
         plt.savefig((self.path/self.name).as_posix()+'.png', dpi=300, bbox_inches='tight')
         plt.close()
         return m_ok, s_ok, m_ko, s_ko
