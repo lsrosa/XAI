@@ -103,8 +103,8 @@ if __name__ == "__main__":
     #--------------------------------
     # CoreVectors 
     #--------------------------------
-    ds_loaders = ds.get_dataset_loaders()
-    #ds_loaders = trim_dataloaders(ds.get_dataset_loaders(), 0.1)
+    #ds_loaders = ds.get_dataset_loaders()
+    ds_loaders = trim_dataloaders(ds.get_dataset_loaders(), 0.05)
     
     corevecs = CoreVectors(
             path = cvs_path,
@@ -155,12 +155,12 @@ if __name__ == "__main__":
     #--------------------------------
     # Peepholes
     #--------------------------------
-    n_classes = 300
+    n_classes = 100
     parser_cv = trim_corevectors
-    parser_kwargs = {'layer': 'classifier.0', 'peep_size':300}
+    parser_kwargs = {'layer': 'classifier.0', 'peep_size':30}
     cls_kwargs = {}#{'batch_size':256} 
     cls = tGMM(
-            nl_classifier = 300,
+            nl_classifier = 30,
             nl_model = n_classes,
             parser = parser_cv,
             parser_kwargs = parser_kwargs,
@@ -219,7 +219,7 @@ if __name__ == "__main__":
             i += 1
             if i == 3: break
 
-        ph.evaluate(
+        ph.evaluate_dists(
                 layer = 'classifier.0',
                 score_type = 'max',
                 coreVectors = cv_dl

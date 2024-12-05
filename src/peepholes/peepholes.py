@@ -2,8 +2,12 @@
 from pathlib import Path
 from tqdm import tqdm
 from collections import Counter
-from matplotlib import pyplot as plt
 import numpy as np
+
+# plotting stuff
+from matplotlib import pyplot as plt
+import seaborn as sb
+from pandas import DataFrame
 
 # torch stuff
 import torch
@@ -164,6 +168,42 @@ class Peepholes:
             _phs[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r').to(self.device)
         
         return
+    
+    def evaluate_dists(self, **kwargs):
+        self.check_uncontexted()
+        
+        layer = self.layer 
+        verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
+        cv_dls = kwargs['coreVectors']
+        score_type = kwargs['score_type']
+
+        print('\n-------------\nEvaluating Distributions\n-------------\n') 
+
+        for ds_key in self._phs:
+            if verbose: print('Evaluating {ds_key}')
+            results = cv_dls[ds_key].dataset['result']
+            scores = self._phs[ds_key][layer]['score_'+score_type]
+            oks = (scores[results == True]).detach().cpu().numpy()
+            kos = (scores[results == False]).detach().cpu().numpy()
+
+            m_ok, s_ok = oks.mean(), oks.std()
+            m_ko, s_ko = kos.mean(), kos.std()
+            if verbose: print('oks mean, std, n: ', m_ok, s_ok, len(oks), '\nkos, mean, std, n', m_ko, s_ko, len(kos))
+
+            #--------------- 
+            # plotting
+            #--------------- 
+            coks = ['ok' for x in oks]
+            ckos = ['ko' for x in kos]
+            df = DataFrame({
+                'score': np.hstack((oks, kos)),
+                'class': np.hstack((coks, ckos))
+                }) 
+            plt.figure()
+            sb.histplot(data=df, bins=100, x='score', hue='class')
+            plt.savefig((self.path/self.name).as_posix()+'.'+ds_key+'.png', dpi=300, bbox_inches='tight')
+            plt.close()
+        return m_ok, s_ok, m_ko, s_ko
 
     def evaluate(self, **kwargs): 
         self.check_uncontexted()
