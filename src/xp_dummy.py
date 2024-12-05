@@ -1,10 +1,14 @@
 from pathlib import Path as Path
+
 from datasets.dummy import Dummy
+from datasets.cifar import Cifar
+
 from models.dummy_model import DummyModel
 from models.model_wrap import ModelWrap
 from models.svd import get_svds
 
-from models.viz import viz_singular_values, viz_compare, viz_compare_per_layer_type
+from coreVectors.coreVectors import CoreVectors 
+from coreVectors.svd_coreVectors import reduct_matrices_from_svds as parser_fn
 
 #from activations.activations import Activations
 #from peepholes.peepholes import Peepholes
@@ -16,16 +20,37 @@ from torchvision.datasets import CIFAR100
 
 if __name__ == "__main__":
     use_cuda = torch.cuda.is_available()
-    cuda_index = torch.cuda.device_count() - 2
+    cuda_index = torch.cuda.device_count() - 1  # 5
+    print('CUDA = ', cuda_index)
     device = torch.device(f"cuda:{cuda_index}" if use_cuda else "cpu")
     print(f"Using {device} device")
-    
+
+    seed = 42
+    verbose = True
+
+    #--------------------------------
+    # Directories definitions
+    #--------------------------------
+    cvs_name = 'corevectors'
+    cvs_path = '/home/saravorabbi/Documents/corevectors'
+
     #--------------------------------
     # Dataset 
     #--------------------------------
-    # model parameters
-    ds = Dummy()
-    ds.load_data()
+    
+    ds_path = '/srv/newpenny/dataset/CIFAR100'
+    dataset = 'CIFAR100'
+    
+    ds = Cifar(
+        dataset=dataset,
+        data_path=ds_path
+        )
+    ds.load_data(
+        dataset=dataset,
+        batch_size=64,
+        data_kwargs = {'num_workers': 8, 'pin_memory': True},
+        seed=seed
+    )
 
     #n_classes = len(train_loader.dataset.dataset.classes)
 
@@ -39,10 +64,10 @@ if __name__ == "__main__":
     model_path = model_dir/model_name
 
     nn = torchvision.models.vit_b_16()
-    
+
     # change the number of classes from 1000 to 100
+    n_classes = len(ds._classes)
     in_features = nn.heads.head.in_features
-    n_classes = 100
     nn.heads.head = torch.nn.Linear(in_features, n_classes)
 
     # # ??
@@ -53,8 +78,7 @@ if __name__ == "__main__":
     # for p in nn.parameters():
     #     print('nn parameters: ', p)
 
-
-    wrap = ModelWrap()
+    wrap = ModelWrap(device=device)
     wrap.set_model(
         model = nn,
         path = model_dir,
@@ -65,44 +89,78 @@ if __name__ == "__main__":
     # for p in wrap._model.state_dict():
     #     print('nn parameters: ', p)
 
-
-
-    # 1 - filter temporary dictionary
+    # make list of target_layers
     st_list = list(nn.state_dict().keys())
-
     key_l = []
-
     for elem in st_list:
         if len(nn.state_dict()[elem].shape) == 2:
             key_l.append(elem)
-
     # remove .weight from the strings in the state_dict list
-    key_clean = [s.replace(".weight", "") for s in key_l]
-    key_clean = sorted(list(set(key_clean))) # unnecessary
+    target_layers = [s.replace(".weight", "") for s in key_l]
+    target_layers = sorted(list(set(target_layers))) # unnecessary
+    
+    # TODO filter out self_attention.out_proj layers 
+    
+    isolated_target_layers = ['encoder.layers.encoder_layer_0.self_attention.out_proj'] 
+    target_layer_mlp0 = ['encoder.layers.encoder_layer_0.mlp.0']
+    
+    #wrap.set_target_layers(target_layers=isolated_target_layers)
+    wrap.set_target_layers(target_layers=target_layer_mlp0)
 
-    # 2 - set_target_layer
-    wrap.set_target_layers(target_layers=key_clean)
+    direction = {'save_input':True, 'save_output':False}
+    wrap.add_hooks(**direction, verbose=verbose)
 
-    # 3 - call svd
+    dry_img, _ = ds._train_ds.dataset[0]
+    dry_img = dry_img.reshape((1,)+dry_img.shape)
+    wrap.dry_run(x=dry_img)
+
+    #--------------------------------
+    # SVDs 
+    #--------------------------------
     path_svd = Path('/home/saravorabbi/Documents/')
     name_svd = 'svd_prova'
-
     wrap.get_svds(path=path_svd, name=name_svd)
-
-    # 5 - print img of curves of svd
-    save_path = Path('/home/saravorabbi/Documents/viz_singular_values')
-    viz_singular_values(wrap, save_path)
-
-    save_path = Path('/home/saravorabbi/Documents/viz_sv_compare')
-    viz_compare(wrap, save_path)
-
-    save_path = Path('/home/saravorabbi/Documents/viz_sv_compare_per_layer_type')
-    viz_compare_per_layer_type(wrap, save_path)
-    
-    
+    for k in wrap._svds.keys():
+        for kk in wrap._svds[k].keys():
+            print('svd shapes: ', k, kk, wrap._svds[k][kk].shape)
 
 
+    #--------------------------------
+    # CoreVectors 
+    #--------------------------------
 
+    ds_loaders = ds.get_dataset_loaders()
+
+    corevecs = CoreVectors(
+        path = cvs_path,
+        name = cvs_name,
+        model = wrap,
+        device = device
+        )
+
+    with corevecs as cv: 
+        # copy dataset to coreVect dataset
+        cv.get_coreVec_dataset(
+            loaders = ds_loaders,
+            verbose = verbose
+            )
+        cv.get_activations(
+            batch_size = 64,
+            loaders = ds_loaders,
+            verbose = verbose
+            )
+        cv.get_coreVectors(
+            batch_size = 64,
+            reduct_matrices = wrap._svds,
+            parser = parser_fn,
+            verbose = verbose
+            )
+        cv_dl = cv.get_dataloaders(verbose=verbose)
+
+
+
+
+    print('ok :)')
 
 
 	#pretrained = True
@@ -193,7 +251,6 @@ if __name__ == "__main__":
     # #dry_input = dry_input.reshape((1,)+dry_img.shape)
     # #dummy.dry_run(x=dry_input)
     
-
 
 
 
