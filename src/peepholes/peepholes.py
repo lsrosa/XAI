@@ -208,15 +208,15 @@ class Peepholes:
             #---------------
             # plot oks and kos dist over val
             ax = axs[i+1]
-            sb.histplot(data=dfs[ds_key], ax=ax, bins=bins, x='score', hue='class', stat='percent', legend=True)
+            sb.histplot(data=dfs[ds_key], ax=ax, bins=bins, x='score', hue='class', stat='density', legend=True)
             ax.set_xlabel(score_type)
             ax.set_ylabel('%')
             ax.title.set_text(ds_key)
         
         # plot train and test distributions
         ax = axs[0]
-        sb.histplot(data=dfs['train'], ax=ax, bins=bins, x='score', stat='percent', legend=True)
-        sb.histplot(data=dfs['val'], ax=ax, bins=bins, x='score', stat='percent', legend=True)
+        sb.histplot(data=dfs['train'], ax=ax, bins=bins, x='score', stat='density', legend=True, alpha=0.5)
+        sb.histplot(data=dfs['val'], ax=ax, bins=bins, x='score', stat='density', legend=True, alpha=0.5)
         ax.set_ylabel('%')
         ax.set_xlabel(score_type)
 
