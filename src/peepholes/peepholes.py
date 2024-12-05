@@ -209,9 +209,9 @@ class Peepholes:
         
         # plot train and test distributions
         ax = axs[0]
-        scores = self._phs['train'][layer]['score_'+score_type]
+        scores = self._phs['train'][layer]['score_'+score_type].detach().cpu().numpy()
         sb.histplot(data=pd.DataFrame({'score': scores}), ax=ax, bins=bins, x='score', stat='density', label='train', alpha=0.5)
-        scores = self._phs['val'][layer]['score_'+score_type]
+        scores = self._phs['val'][layer]['score_'+score_type].detach().cpu().numpy()
         sb.histplot(data=pd.DataFrame({'score': scores}), ax=ax, bins=bins, x='score', stat='density', label='val', alpha=0.5)
         ax.set_ylabel('%')
         ax.set_xlabel(score_type)
