@@ -17,12 +17,13 @@ from classifier.gmm import GMM
 from classifier.tkmeans import KMeans as tKMeans 
 from classifier.tgmm import GMM as tGMM 
 from peepholes.peepholes import Peepholes
+from utils.testing import trim_dataloaders
 
 # torch stuff
 import torch
 from torchvision.models import vgg16, VGG16_Weights
 from cuda_selector import auto_cuda
-from torch.utils.data import random_split, DataLoader
+#from torch.utils.data import random_split, DataLoader
 
 # tuner
 # import tempfile
@@ -75,14 +76,14 @@ if __name__ == "__main__":
     
     # pretrained = True
     seed = 29
-    bs = 64
+    bs = 256
     
     ds = Cifar(
             data_path = ds_path,
             dataset=dataset
             )
     ds.load_data(
-            batch_size = 256, # bs # prendere da qualche config 
+            batch_size = bs, # bs # prendere da qualche config 
             data_kwargs = {'num_workers': 4, 'pin_memory': True},
             seed = seed, # prendere da qualche config
             )
@@ -100,10 +101,10 @@ if __name__ == "__main__":
     model.set_model(model=nn, path=model_dir, name=model_name, verbose=False)
 
     target_layers = [
-            'classifier.0',
+            #'classifier.0',
             'classifier.3',
             'features.28', 
-            'features.26',
+            #'features.26',
             #'features.7'
             ]
     
@@ -146,22 +147,24 @@ if __name__ == "__main__":
                 ) 
 
         cv.get_activations(
-                batch_size = 256,
+                batch_size = bs,
                 loaders = ds_loaders,
                 verbose = verbose
                 )
+        
         cv.get_coreVectors(
-                batch_size = 256,
+                batch_size = bs,
                 reduct_matrices = model._svds,
                 parser = parser_fn,
                 verbose = verbose
                 )
+        
         cv_dl = cv.get_dataloaders(verbose=verbose)
     
         i = 0
         print('\nPrinting some corevecs')
         for data in cv_dl['test']:
-            print(data['coreVectors']['features.28'])
+            print(data['coreVectors']['classifier.3'])
             i += 1
             if i == 3: break
 
@@ -171,7 +174,7 @@ if __name__ == "__main__":
                 )
         i = 0
         for data in cv_dl['test']:
-            print(data['coreVectors']['features.28'][34:56,:])
+            print(data['coreVectors']['classifier.3'][34:56,:])
             i += 1
             if i == 3: break
     
@@ -231,6 +234,11 @@ if __name__ == "__main__":
                                 loaders = ['train', 'test', 'val'],
                                 verbose = True
                                 ) 
+                        
+                        cv_dl = cv.get_dataloaders(
+                                batch_size = bs,
+                                verbose = True,
+                                )
                         
                         t0 = time()
                         cls.fit(dataloader = cv_dl['train'], verbose=verbose)
