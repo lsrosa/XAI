@@ -41,12 +41,12 @@ def get_activations(self, **kwargs):
         cvs_td = self._corevds[ds_key]
 
         # to check if pred and results data exist 
-        has_pred = 'pred' in _td 
+        has_pred = 'pred' in cvs_td 
         
         # allocate memory for pred and result
         if not has_pred:
-            _td['pred'] = MMT.empty(shape=torch.Size((n_samples,)), dtype=torch.int16)
-            _td['result'] = MMT.empty(shape=torch.Size((n_samples,)), dtype=torch.bool)
+            cvs_td['pred'] = MMT.empty(shape=torch.Size((n_samples,)), dtype=torch.int16)
+            cvs_td['result'] = MMT.empty(shape=torch.Size((n_samples,)), dtype=torch.bool)
 
         # check if in and out activations exist
         if model._si and (not ('in_activations' in act_td)):
