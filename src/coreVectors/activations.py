@@ -85,6 +85,7 @@ def get_activations(self, **kwargs):
         
         # allocate memory for pred and result
         if not has_pred:
+            # cvs_data['output'] = MMT.empty(shape=torch.Size((n_samples,)+))
             cvs_td['pred'] = MMT.empty(shape=torch.Size((n_samples,)))
             cvs_td['result'] = MMT.empty(shape=torch.Size((n_samples,)))
         
