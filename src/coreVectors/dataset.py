@@ -13,6 +13,9 @@ def fds(data, key):
     if key == 'label':
         return data[1]
 
+def ftd(data, key):
+    return data[key]
+
 def get_coreVec_dataset(self, **kwargs):
     self.check_uncontexted()
 

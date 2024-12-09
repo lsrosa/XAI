@@ -133,6 +133,7 @@ numpy-base                1.26.4 sh bits used by LSH.
         self.nb_classes = kwargs['nb_classes']
         self.neighbors = kwargs['neighbors']
         self.cv_dl = kwargs['cv_dl']
+        self.act_dl = kwargs['act_dl']
         self.percentage = kwargs['percentage']
         self.device = kwargs['device']
         self.seed = kwargs['seed']
@@ -158,6 +159,8 @@ numpy-base                1.26.4 sh bits used by LSH.
             if self.verbose: print(f'File {self.dknn_path} exists.')
             for ds_key in self.cv_dl:
                 self.res[ds_key] = TensorDict.load_memmap(self.dknn_path/ds_key)
+            self.calibrated = True
+            self.computed = True
         else:
             if self.verbose: print(f'File {self.dknn_path} does not exists. Initializing class DkNN')
             self.dknn_path.mkdir(parents=True, exist_ok=True)
@@ -191,10 +194,9 @@ numpy-base                1.26.4 sh bits used by LSH.
             for layer in self.model._target_layers:
                 filename = path.join(mkdtemp(), 'newfile.dat')
                 filename = path.join(mkdtemp(), 'newfile.dat')
-                act = np.memmap(filename, dtype='float32', mode='w+', shape=self.cv_dl['train'].dataset['in_activations'][layer].flatten(start_dim=1).shape)
-                act[:] = self.cv_dl['train'].dataset['in_activations'][layer].flatten(start_dim=1)[:]
+                act = np.memmap(filename, dtype='float32', mode='w+', shape=self.act_dl['train'].dataset['in_activations'][layer].flatten(start_dim=1).shape)
+                act[:] = self.act_dl['train'].dataset['in_activations'][layer].flatten(start_dim=1)[:]
                 
-                # activations = self.cv_dl['train'].dataset['in_activations'][layer].flatten(start_dim=1).detach().cpu().numpy()
                 if self.percentage[portion] != 100:
                     act = act[idx_rand[:,0]]
                     print(act.shape)
@@ -240,60 +242,64 @@ numpy-base                1.26.4 sh bits used by LSH.
         """
         print('---------- DkNN calibrate')
         print()
+        if self.calibrated == True:
+            print('the model has been already calibrated')
+            
+        else:
     
-        # Compute calibration data activations
-        self.cali_labels = self.cv_dl[portion].dataset['label']
-        
-        n_samples = len(self.cali_labels)
-        
-        if self.percentage[portion] != 100:
-    
-            idx = np.arange(0, n_samples)
-            rng = np.random.default_rng(self.seed)
-            idx_rand = []
+            # Compute calibration data activations
+            self.cali_labels = self.cv_dl[portion].dataset['label']
             
-            for l in np.arange(0,self.nb_classes):
-            
-                idx_l = np.argwhere(self.cali_labels.numpy().astype(int)==l)            
-                n_samples_l = len(idx_l)
-                num_elements_to_select = int(n_samples_l*(self.percentage[portion]/10))            
-                rng.shuffle(idx_l)                
-                idx_rand.append(idx_l[:num_elements_to_select])            
-            
-            idx_rand = np.concatenate(idx_rand,axis=0)
-        
-            self.cali_labels = self.cali_labels[idx_rand[:,0]]
-        self.nb_cali = len(self.cali_labels)
-        print("## Starting calibration of DkNN")
-        knns_ind = {}
-        knns_labels = {}
-        for layer in self.model._target_layers:
-            
-            print(f"## calibration of {layer}")
-
-            filename = path.join(mkdtemp(), 'newfile.dat')
-            act = np.memmap(filename, dtype='float32', mode='w+', shape=self.cv_dl[portion].dataset['in_activations'][layer].flatten(start_dim=1).shape)
-            act[:] = self.cv_dl[portion].dataset['in_activations'][layer].flatten(start_dim=1).detach().cpu().numpy()[:]
+            n_samples = len(self.cali_labels)
             
             if self.percentage[portion] != 100:
-                act = act[idx_rand[:,0]]
+        
+                idx = np.arange(0, n_samples)
+                rng = np.random.default_rng(self.seed)
+                idx_rand = []
                 
-            knns_ind[layer], knns_labels[layer] = self.find_train_knns(act, layer)
-
-        
-        assert all([v.shape == (self.nb_cali, self.neighbors) for v in knns_ind.values()])
-        assert all([v.shape == (self.nb_cali, self.neighbors) for v in knns_labels.values()])
+                for l in np.arange(0,self.nb_classes):
+                
+                    idx_l = np.argwhere(self.cali_labels.numpy().astype(int)==l)            
+                    n_samples_l = len(idx_l)
+                    num_elements_to_select = int(n_samples_l*(self.percentage[portion]/10))            
+                    rng.shuffle(idx_l)                
+                    idx_rand.append(idx_l[:num_elements_to_select])            
+                
+                idx_rand = np.concatenate(idx_rand,axis=0)
+            
+                self.cali_labels = self.cali_labels[idx_rand[:,0]]
+            self.nb_cali = len(self.cali_labels)
+            print("## Starting calibration of DkNN")
+            knns_ind = {}
+            knns_labels = {}
+            for layer in self.model._target_layers:
+                
+                print(f"## calibration of {layer}")
     
-        cali_knns_not_in_class = self.nonconformity(knns_labels)
-        cali_knns_not_in_l = np.zeros(self.nb_cali, dtype=np.int32)
-        
-        for i in range(self.nb_cali):
-            cali_knns_not_in_l[i] = cali_knns_not_in_class[i, self.cali_labels[i].numpy().astype(int)]
+                filename = path.join(mkdtemp(), 'newfile.dat')
+                act = np.memmap(filename, dtype='float32', mode='w+', shape=self.act_dl[portion].dataset['in_activations'][layer].flatten(start_dim=1).shape)
+                act[:] = self.act_dl[portion].dataset['in_activations'][layer].flatten(start_dim=1).detach().cpu().numpy()[:]
+                
+                if self.percentage[portion] != 100:
+                    act = act[idx_rand[:,0]]
+                    
+                knns_ind[layer], knns_labels[layer] = self.find_train_knns(act, layer)
     
-        cali_knns_not_in_l_sorted = np.sort(cali_knns_not_in_l)
-        self.cali_nonconformity = np.trim_zeros(cali_knns_not_in_l_sorted, trim='f')
-        self.nb_cali = self.cali_nonconformity.shape[0]
-        self.calibrated = True
+            
+            assert all([v.shape == (self.nb_cali, self.neighbors) for v in knns_ind.values()])
+            assert all([v.shape == (self.nb_cali, self.neighbors) for v in knns_labels.values()])
+        
+            cali_knns_not_in_class = self.nonconformity(knns_labels)
+            cali_knns_not_in_l = np.zeros(self.nb_cali, dtype=np.int32)
+            
+            for i in range(self.nb_cali):
+                cali_knns_not_in_l[i] = cali_knns_not_in_class[i, self.cali_labels[i].numpy().astype(int)]
+        
+            cali_knns_not_in_l_sorted = np.sort(cali_knns_not_in_l)
+            self.cali_nonconformity = np.trim_zeros(cali_knns_not_in_l_sorted, trim='f')
+            self.nb_cali = self.cali_nonconformity.shape[0]
+            self.calibrated = True
     
     def find_train_knns(self, data_activations, layer):
         """
@@ -356,96 +362,101 @@ numpy-base                1.26.4 sh bits used by LSH.
         print()
         if not self.calibrated:
             raise ValueError("DkNN needs to be calibrated by calling DkNNModel.calibrate method once before inferring")
+        if self.computed:
+
+            print('the results can be found in self.res')
             
-        if portion == 'all':
-
-            for ds_key in self.cv_dl:
-                
-                bs = self.cv_dl[ds_key].batch_size
-                n_samples = len(self.cv_dl[ds_key].dataset)
-                score = TensorDict(batch_size=n_samples)
-                
-                score['preds_knn'] = MMT.empty(shape=torch.Size((n_samples,)))
-                score['confs'] = MMT.empty(shape=torch.Size((n_samples,)))
-                score['creds'] = MMT.empty(shape=torch.Size((n_samples,)))
-                score['p-value'] = MMT.empty(shape=torch.Size((n_samples,)+(self.nb_classes,)))
-                # _dl = DataLoader(self.cv_dl[ds_key].dataset['in_activations'], batch_size=64, collate_fn = lambda x: x, shuffle=False)
-
-                if self.verbose: print(f'\n ---- Getting scores for {ds_key}\n')
-               
-                # for i in range(n_samples):
+        else:
+            
+            if portion == 'all':
+    
+                for ds_key in self.cv_dl:
                     
+                    bs = self.cv_dl[ds_key].batch_size
+                    n_samples = len(self.cv_dl[ds_key].dataset)
+                    score = TensorDict(batch_size=n_samples)
+                    
+                    score['preds_knn'] = MMT.empty(shape=torch.Size((n_samples,)))
+                    score['confs'] = MMT.empty(shape=torch.Size((n_samples,)))
+                    score['creds'] = MMT.empty(shape=torch.Size((n_samples,)))
+                    score['p-value'] = MMT.empty(shape=torch.Size((n_samples,)+(self.nb_classes,)))
+                    # _dl = DataLoader(self.cv_dl[ds_key].dataset['in_activations'], batch_size=64, collate_fn = lambda x: x, shuffle=False)
+    
+                    if self.verbose: print(f'\n ---- Getting scores for {ds_key}\n')
+                   
+                    # for i in range(n_samples):
+                        
+                    knns_labels = {}
+                             
+                    for layer in self.model._target_layers:
+                        
+                        filename = path.join(mkdtemp(), 'newfile.dat')
+                        act = np.memmap(filename, dtype='float32', mode='w+', shape=self.act_dl[ds_key].dataset['in_activations'][layer].flatten(start_dim=1).shape)
+                        print(f'start finding_knns for {layer}')
+                        act[:] = self.act_dl[ds_key].dataset['in_activations'][layer].flatten(start_dim=1).detach().cpu().numpy()[:]
+                        
+                        _, knns_labels[layer] = self.find_train_knns(act, layer)
+            
+                    # Calculate nonconformity
+                    knns_not_in_class = self.nonconformity(knns_labels)
+            
+                    # Create predictions, confidence and credibility
+                    preds_knn, confs, creds, p_value = self.preds_conf_cred(knns_not_in_class)
+                    
+                    score['preds_knn'] = torch.Tensor(preds_knn)
+                    score['confs'] = torch.Tensor(confs)
+                    score['creds'] = torch.Tensor(creds)
+                    score['p-value'] = torch.Tensor(p_value)
+                                        
+                    file_path = self.dknn_path/(ds_key)
+                    n_threads = 32
+                    if self.verbose: print(f'Saving {ds_key} to {file_path}.')
+                    score.memmap(file_path, num_threads=n_threads)
+                    self.res[ds_key] = score
+            
+            else:
+                
+                labels = self.cv_dl[portion].dataset['label']
+            
+                n_samples = len(labels)
+                
+                if self.percentage[portion] != 100:
+            
+                    idx = np.arange(0, n_samples)
+                    rng = np.random.default_rng(self.seed)
+                    idx_rand = []
+                    
+                    for l in np.arange(0,self.nb_classes):
+                    
+                        idx_l = np.argwhere(labels.numpy().astype(int)==l)            
+                        n_samples_l = len(idx_l)
+                        num_elements_to_select = int(n_samples_l*(self.percentage[portion]/100))            
+                        rng.shuffle(idx_l)                
+                        idx_rand.append(idx_l[:num_elements_to_select])            
+                    
+                    idx_rand = np.concatenate(idx_rand,axis=0)
+                
+                    labels = labels[idx_rand[:,0]]
+                
                 knns_labels = {}
-                         
                 for layer in self.model._target_layers:
                     
                     filename = path.join(mkdtemp(), 'newfile.dat')
-                    act = np.memmap(filename, dtype='float32', mode='w+', shape=self.cv_dl[ds_key].dataset['in_activations'][layer].flatten(start_dim=1).shape)
-                    print(f'start finding_knns for {layer}')
-                    act[:] = self.cv_dl[ds_key].dataset['in_activations'][layer].flatten(start_dim=1).detach().cpu().numpy()[:]
+                    act = np.memmap(filename, dtype='float32', mode='w+', shape=self.act_dl[portion].dataset['in_activations'][layer].flatten(start_dim=1).shape)
+                    act[:] = self.act_dl[portion].dataset['in_activations'][layer].flatten(start_dim=1).detach().cpu().numpy()[:]
                     
+                    if self.percentage[portion] != 100:
+                        act = act[idx_rand[:,0]]
+    
                     _, knns_labels[layer] = self.find_train_knns(act, layer)
         
-                # Calculate nonconformity
-                knns_not_in_class = self.nonconformity(knns_labels)
+                #Calculate nonconformity
+                knns_not_in_class = self.nonconformity(knns_labels)      
         
                 # Create predictions, confidence and credibility
                 preds_knn, confs, creds, p_value = self.preds_conf_cred(knns_not_in_class)
-                
-                score['preds_knn'] = torch.Tensor(preds_knn)
-                score['confs'] = torch.Tensor(confs)
-                score['creds'] = torch.Tensor(creds)
-                score['p-value'] = torch.Tensor(p_value)
-                                    
-                file_path = self.dknn_path/(ds_key)
-                n_threads = 32
-                if self.verbose: print(f'Saving {ds_key} to {file_path}.')
-                score.memmap(file_path, num_threads=n_threads)
-                self.res[ds_key] = score
         
-        else:
-            
-            labels = self.cv_dl[portion].dataset['label']
-        
-            n_samples = len(labels)
-            
-            if self.percentage[portion] != 100:
-        
-                idx = np.arange(0, n_samples)
-                rng = np.random.default_rng(self.seed)
-                idx_rand = []
-                
-                for l in np.arange(0,self.nb_classes):
-                
-                    idx_l = np.argwhere(labels.numpy().astype(int)==l)            
-                    n_samples_l = len(idx_l)
-                    num_elements_to_select = int(n_samples_l*(self.percentage[portion]/100))            
-                    rng.shuffle(idx_l)                
-                    idx_rand.append(idx_l[:num_elements_to_select])            
-                
-                idx_rand = np.concatenate(idx_rand,axis=0)
-            
-                labels = labels[idx_rand[:,0]]
-            
-            knns_labels = {}
-            for layer in self.model._target_layers:
-                
-                filename = path.join(mkdtemp(), 'newfile.dat')
-                act = np.memmap(filename, dtype='float32', mode='w+', shape=self.cv_dl[portion].dataset['in_activations'][layer].flatten(start_dim=1).shape)
-                act[:] = self.cv_dl[portion].dataset['in_activations'][layer].flatten(start_dim=1).detach().cpu().numpy()[:]
-                
-                if self.percentage[portion] != 100:
-                    act = act[idx_rand[:,0]]
-
-                _, knns_labels[layer] = self.find_train_knns(act, layer)
-    
-            #Calculate nonconformity
-            knns_not_in_class = self.nonconformity(knns_labels)      
-    
-            # Create predictions, confidence and credibility
-            preds_knn, confs, creds, p_value = self.preds_conf_cred(knns_not_in_class)
-    
-            return preds_knn, confs, creds, p_value 
+                return preds_knn, confs, creds, p_value 
 
         
     def preds_conf_cred(self, knns_not_in_class):

@@ -42,6 +42,7 @@ class CoreVectors():
 
         # computed in get_dataloaders()
         self._loaders = {}
+        self._act_loaders = {}
         return
      
     def normalize_corevectors(self, **kwargs):
@@ -138,29 +139,43 @@ class CoreVectors():
 
         verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         loaders = kwargs['loaders']
-
-        for ds_key in loaders:
-            if verbose: print(f'\n ---- Getting data from {ds_key}\n')
-            file_path = self.path/(self.name.name+'.'+ds_key)
-            self._cvs_file_paths[ds_key] = file_path
-            
-            if verbose: print(f'File {file_path} exists. Loading from disk.')
-            self._corevds[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r')
-
-            self._n_samples[ds_key] = len(self._corevds[ds_key])
-            if verbose: print('loaded n_samples: ', self._n_samples[ds_key])
+        load_type = kwargs['load_type']
         
-        norm_file_path = self.path/(self.name.name+'.normalization')
-        if norm_file_path.exists():
-            if verbose: print('Loading normalization info.')
-            # TODO: should save and load these as non-tensor within tensordict
-            means, stds, is_normed, wrt = torch.load(norm_file_path)
-            self._norm_mean = means 
-            self._norm_std = stds
-            self._is_normalized = is_normed
-            self._norm_wrt = wrt
-        else:
-            if verbose: print('No normalization info found')
+        if load_type == 'corevectors.activations':
+            for ds_key in loaders:
+                if verbose: print(f'\n ---- Getting data from {ds_key}\n')
+                file_path = self.path/(self.name.name+'.'+ds_key)
+                self._cvs_file_paths[ds_key] = file_path
+                
+                if verbose: print(f'File {file_path} exists. Loading from disk.')
+                self._actds[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r')
+
+                self._n_samples[ds_key] = len(self._actds[ds_key])
+                if verbose: print('loaded n_samples: ', self._n_samples[ds_key])
+
+        elif load_type == 'corevectors':
+            for ds_key in loaders:
+                if verbose: print(f'\n ---- Getting data from {ds_key}\n')
+                file_path = self.path/(self.name.name+'.'+ds_key)
+                self._cvs_file_paths[ds_key] = file_path
+                
+                if verbose: print(f'File {file_path} exists. Loading from disk.')
+                self._corevds[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r')
+
+                self._n_samples[ds_key] = len(self._corevds[ds_key])
+                if verbose: print('loaded n_samples: ', self._n_samples[ds_key])
+            
+            norm_file_path = self.path/(self.name.name+'.normalization')
+            if norm_file_path.exists():
+                if verbose: print('Loading normalization info.')
+                # TODO: should save and load these as non-tensor within tensordict
+                means, stds, is_normed, wrt = torch.load(norm_file_path)
+                self._norm_mean = means 
+                self._norm_std = stds
+                self._is_normalized = is_normed
+                self._norm_wrt = wrt
+            else:
+                if verbose: print('No normalization info found')
 
         return
     
@@ -192,3 +207,36 @@ class CoreVectors():
         if not self._is_contexted:
             raise RuntimeError('Function should be called within context manager')
         return
+
+    def get_activations_loaders(self, **kwargs):
+        self.check_uncontexted()
+        
+        _bs = kwargs['batch_size'] if 'batch_size' in kwargs else 64
+        if isinstance(_bs, int):
+            batch_dict = {key: _bs for key in self._actds}
+        elif isinstance(_bs, dict):
+            batch_dict = _bs
+        else:
+            raise RuntimeError('Batch size should be a dict or an integer')
+
+        verbose = kwargs['verbose'] if 'verbose' in kwargs else False 
+        if self._act_loaders:
+            if verbose: print('Loaders exist. Returning existing ones.')
+            return self._act_loaders
+
+
+        print('Chiavi del _actds: ', self._actds['train']['in_activations'].keys())
+
+        # Create dataloader for each corevecs TensorDicts 
+        _loaders = {}
+        for ds_key in self._actds:
+            if verbose: print('creating dataloader for: ', ds_key)
+            _loaders[ds_key] = DataLoader(
+                    dataset = self._actds[ds_key],
+                    batch_size = batch_dict[ds_key], 
+                    collate_fn = lambda x: x
+                    )
+
+        self._act_loaders = _loaders 
+        return self._act_loaders
+
