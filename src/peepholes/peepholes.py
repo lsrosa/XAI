@@ -165,7 +165,7 @@ class Peepholes:
             file_path = self.path/(self.name.name+'.'+ds_key)
            
             if verbose: print(f'File {file_path} exists. Loading from disk.')
-            _phs[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r').to(self.device)
+            self._phs[ds_key] = PersistentTensorDict.from_h5(file_path, mode='r').to(self.device)
         
         return
     

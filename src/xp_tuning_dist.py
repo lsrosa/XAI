@@ -17,6 +17,7 @@ from peepholes.peepholes import Peepholes
 # torch stuff
 import torch
 from torchvision.models import vgg16, VGG16_Weights
+from cuda_selector import auto_cuda
 
 # Tuner
 import tempfile
@@ -73,7 +74,7 @@ def peephole_wrap(config, **kwargs):
                     )
             
             # TODO: should save and load these instead of running the function again
-            mok, sok, mko, sko = ph.evaluate_dist(
+            mok, sok, mko, sko = ph.evaluate_dists(
                 score_type = score_type,
                 coreVectors = cv_dl,
                 bins = 20
@@ -106,9 +107,12 @@ def peephole_wrap(config, **kwargs):
                 verbose = True
                 )
     
-            ph.get_scores(verbose=True)
+            ph.get_scores(
+                    batch_size = 512, 
+                    verbose=True
+                    )
 
-            mok, sok, mko, sko = ph.evaluate_dist(
+            mok, sok, mko, sko = ph.evaluate_dists(
                 score_type = score_type,
                 coreVectors = cv_dl,
                 bins = 20
@@ -121,10 +125,10 @@ def peephole_wrap(config, **kwargs):
                                                                
         checkpoint = Checkpoint.from_directory(checkpoint_dir)
         train.report({
-            'mok': mok,
-            'sok': sok,
-            'mko': mko,
-            'sko': sko,
+            'mok': mok['val'],
+            'sok': sok['val'],
+            'mko': mko['val'],
+            'sko': sko['val'],
             },
             checkpoint=checkpoint
         )
@@ -220,7 +224,7 @@ if __name__ == "__main__":
                 trainable,
                 tune_config = tune.TuneConfig(
                     search_alg = algo,
-                    num_samples = 15, 
+                    num_samples = 2, 
                     scheduler = scheduler,
                     ),
                 run_config = train.RunConfig(
