@@ -187,8 +187,8 @@ if __name__ == "__main__":
         #--------------------------------
 
         config = {
-                'peep_size': tune.choice([2**i for i in range(2, 9)]),
-                'n_classifier': tune.choice([2**i for i in range(2, 9)]),
+                'peep_size': tune.choice([20*i for i in range(2, 16)]),
+                'n_classifier': tune.choice([20*i for i in range(2, 16)]),
                 'score_type': tune.choice(['max', 'entropy']), 
                 }
 
@@ -224,7 +224,7 @@ if __name__ == "__main__":
                 trainable,
                 tune_config = tune.TuneConfig(
                     search_alg = algo,
-                    num_samples = 2, 
+                    num_samples = 50, 
                     scheduler = scheduler,
                     ),
                 run_config = train.RunConfig(
