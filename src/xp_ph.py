@@ -151,16 +151,16 @@ if __name__ == "__main__":
             print(data['coreVectors']['classifier.0'][34:56,:])
             i += 1
             if i == 3: break
-    quit()
+
     #--------------------------------
     # Peepholes
     #--------------------------------
     n_classes = 100
     parser_cv = trim_corevectors
-    parser_kwargs = {'layer': 'classifier.0', 'peep_size':30}
+    parser_kwargs = {'layer': 'classifier.0', 'peep_size':100}
     cls_kwargs = {}#{'batch_size':256} 
     cls = tGMM(
-            nl_classifier = 30,
+            nl_classifier = 100,
             nl_model = n_classes,
             parser = parser_cv,
             parser_kwargs = parser_kwargs,
