@@ -36,8 +36,7 @@ if __name__ == "__main__":
     seed = 29
     bs = 512 
     model_dir = '/srv/newpenny/XAI/models'
-    model_name = f'vgg16_pretrained={pretrained}_dataset={dataset}-'\
-    f'augmented_policy=CIFAR10_bs=64_seed={seed}.pth'
+    model_name = 'LM_model=vgg16_dataset=CIFAR100_augment=True_optim=SGD_scheduler=LROnPlateau.pth'
     
     svds_name = 'svds' 
     svds_path = Path.cwd()/'../data'
@@ -151,7 +150,7 @@ if __name__ == "__main__":
             print(data['coreVectors']['classifier.0'][34:56,:])
             i += 1
             if i == 3: break
-
+    quit()
     #--------------------------------
     # Peepholes
     #--------------------------------
