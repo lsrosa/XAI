@@ -7,7 +7,7 @@ from models.dummy_model import DummyModel
 from models.model_wrap import ModelWrap
 from models.svd import get_svds
 
-from coreVectors.coreVectors import CoreVectors 
+from coreVectors.coreVectors import CoreVectors
 from coreVectors.svd_coreVectors import reduct_matrices_from_svds as parser_fn
 
 #from activations.activations import Activations
@@ -33,6 +33,11 @@ if __name__ == "__main__":
     #--------------------------------
     cvs_name = 'corevectors'
     cvs_path = '/home/saravorabbi/Documents/corevectors'
+
+    act_name = 'activations'
+
+    phs_name = 'peepholes'
+    phs_path = '/home/saravorabbi/Documents/peepholes'
 
     #--------------------------------
     # Dataset 
@@ -156,6 +161,53 @@ if __name__ == "__main__":
             verbose = verbose
             )
         cv_dl = cv.get_dataloaders(verbose=verbose)
+
+        #cv_act_loaders = 
+        act_load = cv.get_activations_loaders(verbose=verbose)
+        
+        
+        #print('ACT LOAD = ', type(act_load))
+        
+        #print('TRAIN TYPE = ', type(act_load['train']))
+        #print(act_load['train']['in_activations'])
+        
+        
+        #layer = act_load['train'].dataset['in_activations']['encoder.layers.encoder_layer_0.mlp.0'].detach().cpu().numpy()
+        #layer = prova.detach().cpu().numpy()
+        #print(layer.shape)
+
+
+    with corevecs as cv:
+        cv.load_only(
+                loaders = ['train', 'test', 'val'],
+                load_type = 'corevectors.activations',
+                verbose = verbose
+                ) 
+
+
+        # act = cv._actds
+        # print('ACT KEYS = ', act['train'].keys())
+        # print('TIPO = ', type(act))
+
+        # in_activations = act['train']['in_activations']
+        # nested_keys = in_activations.keys()  # Check nested keys
+        
+        # print("IN ACTIVATION KEYS = ", nested_keys)
+        
+        # print(in_activations.keys())
+
+        # layerr = in_activations['encoder.layers.encoder_layer_0.mlp.0']
+
+
+        # if isinstance(layerr, torch.Tensor):
+        #     numpy_data = layerr.detach().cpu().numpy()
+        #     print('SONO DENTROOOO')
+        #     print("Numpy array:", numpy_data.shape)
+
+
+        #print some activations 
+        #for p in act['train']['in_activations']
+
 
 
 
