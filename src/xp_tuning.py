@@ -1,5 +1,9 @@
 # python stuff
 from pathlib import Path as Path
+import pandas as pd
+import seaborn as sb
+from matplotlib import pyplot as plt
+import numpy as np
 
 # Our stuff
 from datasets.cifar import Cifar
@@ -35,6 +39,7 @@ def peephole_wrap(config, **kwargs):
     cv_dl = kwargs['corevec_dataloader']
     ph_path = kwargs['ph_path']
     ph_name = kwargs['ph_name']
+    peep_layer = kwargs['peep_layer'] 
 
     checkpoint = get_checkpoint()
     if checkpoint:
@@ -49,8 +54,7 @@ def peephole_wrap(config, **kwargs):
     #--------------------------------
     parser_cv = trim_corevectors
     n_classes = 100
-    target_layer = 'classifier.0' 
-    parser_kwargs = {'layer': target_layer, 'peep_size':peep_size}
+    parser_kwargs = {'layer': peep_layer, 'peep_size':peep_size}
     cls_kwargs = {}#{'n_init':n_init, 'max_iter':max_iter} 
     ph_config_name = ph_name+f'.{peep_size}.{n_cls}.{score_type}'
 
@@ -61,7 +65,7 @@ def peephole_wrap(config, **kwargs):
                 path = ph_path,
                 name = ph_config_name,
                 classifier = None,
-                layer = target_layer,
+                layer = peep_layer,
                 device = device
                 )
         with peepholes as ph: 
@@ -94,7 +98,7 @@ def peephole_wrap(config, **kwargs):
                 path = ph_path,
                 name = ph_config_name,
                 classifier = cls,
-                layer = target_layer,
+                layer = peep_layer,
                 device = device
                 )
         
@@ -148,8 +152,7 @@ if __name__ == "__main__":
     seed = 29
     bs = 512 
     model_dir = '/srv/newpenny/XAI/models'
-    model_name = f'vgg16_pretrained={pretrained}_dataset={dataset}-'\
-    f'augmented_policy=CIFAR10_bs=64_seed={seed}.pth'
+    model_name = 'LM_model=vgg16_dataset=CIFAR100_augment=True_optim=SGD_scheduler=LROnPlateau.pth'
     
     svds_name = 'svds' 
     svds_path = Path.cwd()/'../data'
@@ -160,6 +163,12 @@ if __name__ == "__main__":
     phs_name = 'peepholes'
     phs_path = Path.cwd()/'../data/peepholes'
     phs_path.mkdir(parents=True, exist_ok=True)
+
+    peep_layer = 'features.28'
+
+    corr_path = Path.cwd()/'temp_plots/correlations'
+    corr_path.mkdir(parents=True, exist_ok=True)
+
     #--------------------------------
     # CoreVectors 
     #--------------------------------
@@ -194,44 +203,66 @@ if __name__ == "__main__":
         else:
             resources = {"cpu": 32, "gpu": 5}
 
-        hyper_params_file = phs_path/f'hyperparams.pickle'
+        hyper_params_file = phs_path/f'hyperparams.{peep_layer}.pickle'
         if hyper_params_file.exists():
             print("Already tunned parameters fount in %s. Skipping"%(hyper_params_file.as_posix()))
-            exit()
-   
-        searcher = OptunaSearch(
-                metric = ['mok', 'sok', 'mko', 'sko'],
-                mode = ['max', 'min', 'min', 'min']
-                )
-        algo = ConcurrencyLimiter(searcher, max_concurrent=4)
-        scheduler = AsyncHyperBandScheduler(grace_period=5, max_t=100, metric="mok", mode="max") 
-        tune_storage_path = Path.cwd()/'../data/tuning'
-        trainable = tune.with_resources(
-                partial(
-                    peephole_wrap,
-                    device = device,
-                    corevec_dataloader = cv_dl,
-                    ph_path = phs_path,
-                    ph_name = phs_name
-                    ),
-                resources 
-                )
+        else: 
 
-        tuner = tune.Tuner(
-                trainable,
-                tune_config = tune.TuneConfig(
-                    search_alg = algo,
-                    num_samples = 50, 
-                    scheduler = scheduler,
-                    ),
-                run_config = train.RunConfig(
-                    storage_path = tune_storage_path
-                    ),
-                param_space = config,
-                )
-        result = tuner.fit()
+            searcher = OptunaSearch(
+                    metric = ['mok', 'sok', 'mko', 'sko'],
+                    mode = ['max', 'min', 'min', 'min']
+                    )
+            algo = ConcurrencyLimiter(searcher, max_concurrent=4)
+            scheduler = AsyncHyperBandScheduler(grace_period=5, max_t=100, metric="mok", mode="max") 
+            tune_storage_path = Path.cwd()/'../data/tuning'
+            trainable = tune.with_resources(
+                    partial(
+                        peephole_wrap,
+                        device = device,
+                        corevec_dataloader = cv_dl,
+                        ph_path = phs_path,
+                        ph_name = phs_name+'.'+peep_layer,
+                        peep_layer = peep_layer 
+                        ),
+                    resources 
+                    )
 
-        results_df = result.get_dataframe()
-        print('results: ', results_df)
-        results_df.to_pickle(hyper_params_file)
-        
+            tuner = tune.Tuner(
+                    trainable,
+                    tune_config = tune.TuneConfig(
+                        search_alg = algo,
+                        num_samples = 50, 
+                        scheduler = scheduler,
+                        ),
+                    run_config = train.RunConfig(
+                        storage_path = tune_storage_path
+                        ),
+                    param_space = config,
+                    )
+            result = tuner.fit()
+
+            results_df = result.get_dataframe()
+            print('results: ', results_df)
+            results_df.to_pickle(hyper_params_file)
+    
+    #---------------------------------
+    # plot correlations between metrics and hyperparams 
+    #---------------------------------
+    print('\n------------------\nprinting\n------------------')
+    hyperp_file = phs_path/f'hyperparams.{peep_layer}.pickle'
+    rdf = pd.read_pickle(hyperp_file)
+    metrics = np.vstack((rdf['mok'].values , rdf['sok'].values, rdf['mko'].values, rdf['sko'].values)).T
+    m_names = ['mok', 'sok', 'mko', 'sko']
+    configs = np.vstack((rdf['config/peep_size'].values, rdf['config/n_classifier'].values)).T
+    c_names = ['peep_size', 'n_classifier']
+    
+    fig, axs = plt.subplots(2, 4, figsize=(4*4, 2*4))
+    for m in range(metrics.shape[1]):
+        for c in range(configs.shape[1]):
+            ax = axs[c][m]
+            df = pd.DataFrame({c_names[c]: configs[:,c], m_names[m]: metrics[:,m]})
+            sb.scatterplot(data=df, ax=ax, x=c_names[c], y=m_names[m])
+            ax.set_xlabel(c_names[c])
+            ax.set_ylabel(m_names[m])
+    plt.savefig((corr_path/peep_layer).as_posix()+'.png', dpi=300, bbox_inches='tight')
+    plt.close()

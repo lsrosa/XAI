@@ -19,7 +19,6 @@ import torch
 from torchvision.models import vgg16, VGG16_Weights
 from cuda_selector import auto_cuda
 
-
 if __name__ == "__main__":
     use_cuda = torch.cuda.is_available()
     device = torch.device(auto_cuda('utilization')) if use_cuda else torch.device("cpu")
@@ -42,13 +41,14 @@ if __name__ == "__main__":
     svds_path = Path.cwd()/'../data'
     
     cvs_name = 'corevectors'
-    cvs_path = Path.cwd()/'../data/corevectors'
+    cvs_path = Path.cwd()/'../data/leo/corevectors'
     
     phs_name = 'peepholes'
-    phs_path = Path.cwd()/'../data/peepholes'
+    phs_path = Path.cwd()/'../data/leo/peepholes'
     
     verbose = True 
-    
+    data_perc = 0.15 
+
     #--------------------------------
     # Dataset 
     #--------------------------------
@@ -75,11 +75,11 @@ if __name__ == "__main__":
     model.set_model(model=nn, path=model_dir, name=model_name, verbose=verbose)
 
     target_layers = [
-            'classifier.0',
-            'classifier.3',
-            'features.7',
+            #'classifier.0',
+            #'classifier.3',
+            ##'features.7',
             'features.14',
-            'features.28',
+            #'features.28',
             ]
     model.set_target_layers(target_layers=target_layers, verbose=verbose)
 
@@ -95,15 +95,16 @@ if __name__ == "__main__":
     #--------------------------------
     print('target layers: ', model.get_target_layers()) 
     model.get_svds(path=svds_path, name=svds_name, verbose=verbose)
+    '''
     for k in model._svds.keys():
         for kk in model._svds[k].keys():
             print('svd shapes: ', k, kk, model._svds[k][kk].shape)
-
+    '''
     #--------------------------------
     # CoreVectors 
     #--------------------------------
-    ds_loaders = ds.get_dataset_loaders()
-    #ds_loaders = trim_dataloaders(ds.get_dataset_loaders(), 0.05)
+    #ds_loaders = ds.get_dataset_loaders()
+    ds_loaders = trim_dataloaders(ds.get_dataset_loaders(), data_perc)
     
     corevecs = CoreVectors(
             path = cvs_path,
@@ -132,94 +133,99 @@ if __name__ == "__main__":
                 )
 
         cv_dl = cv.get_dataloaders(verbose=verbose)
-    
+        
+        '''
         i = 0
         print('\nPrinting some corevecs')
         for data in cv_dl['train']:
             print(data['coreVectors']['classifier.0'][34:56,:])
             i += 1
             if i == 3: break
+        '''
 
         cv.normalize_corevectors(
                 wrt='train',
                 verbose=verbose
                 )
+        '''
         i = 0
         print('after norm')
         for data in cv_dl['train']:
             print(data['coreVectors']['classifier.0'][34:56,:])
             i += 1
             if i == 3: break
-    quit()
+        '''
+
     #--------------------------------
     # Peepholes
     #--------------------------------
-    n_classes = 100
-    parser_cv = trim_corevectors
-    peep_layer = 'features.7'
-    parser_kwargs = {'layer': peep_layer, 'peep_size':100}
-    cls_kwargs = {}#{'batch_size':256} 
-    cls = tGMM(
-            nl_classifier = 100,
-            nl_model = n_classes,
-            parser = parser_cv,
-            parser_kwargs = parser_kwargs,
-            cls_kwargs = cls_kwargs,
-            device = device
-            )
-
-    corevecs = CoreVectors(
-            path = cvs_path,
-            name = cvs_name,
-            )
-    
-    peepholes = Peepholes(
-            path = phs_path,
-            name = phs_name+'.'+peep_layer,
-            classifier = cls,
-            layer = peep_layer,
-            device = device
-            )
-
-    with corevecs as cv, peepholes as ph:
-        cv.load_only(
-                loaders = ['train', 'test', 'val'],
-                verbose = True
-                ) 
-
-        cv_dl = cv.get_dataloaders(
-                batch_size = bs,
-                verbose = True,
+    for peep_layer in target_layers:
+        n_classes = 100
+        parser_cv = trim_corevectors
+        parser_kwargs = {'layer': peep_layer, 'peep_size':100}
+        cls_kwargs = {}#{'batch_size':256} 
+        cls = tGMM(
+                nl_classifier = 100,
+                nl_model = n_classes,
+                parser = parser_cv,
+                parser_kwargs = parser_kwargs,
+                cls_kwargs = cls_kwargs,
+                device = device
                 )
-    
-        t0 = time()
-        cls.fit(dataloader = cv_dl['train'], verbose=verbose)
-        print('Fitting time = ', time()-t0)
+
+        corevecs = CoreVectors(
+                path = cvs_path,
+                name = cvs_name,
+                )
         
-        cls.compute_empirical_posteriors(verbose=verbose)
-
-        ph.get_peepholes(
-                loaders = cv_dl,
-                verbose = verbose
+        peepholes = Peepholes(
+                path = phs_path,
+                name = phs_name+'.'+peep_layer,
+                classifier = cls,
+                layer = peep_layer,
+                device = device
                 )
 
-        ph.get_scores(
-            batch_size = bs,
-            verbose=verbose
-            )
+        with corevecs as cv, peepholes as ph:
+            cv.load_only(
+                    loaders = ['train', 'test', 'val'],
+                    verbose = True
+                    ) 
 
-        i = 0
-        print('\nPrinting some peeps')
-        ph_dl = ph.get_dataloaders(verbose=verbose)
-        for data in ph_dl['test']:
-            print('phs\n', data[peep_layer]['peepholes'])
-            print('max\n', data[peep_layer]['score_max'])
-            print('ent\n', data[peep_layer]['score_entropy'])
-            i += 1
-            if i == 3: break
+            cv_dl = cv.get_dataloaders(
+                    batch_size = bs,
+                    verbose = True,
+                    )
+        
+            t0 = time()
+            cls.fit(dataloader = cv_dl['train'], verbose=verbose)
+            print('Fitting time = ', time()-t0)
+            
+            cls.compute_empirical_posteriors(verbose=verbose)
 
-        ph.evaluate_dists(
-                score_type = 'max',
-                coreVectors = cv_dl,
-                bins = 20
+            ph.get_peepholes(
+                    loaders = cv_dl,
+                    verbose = verbose
+                    )
+
+            ph.get_scores(
+                batch_size = bs,
+                verbose=verbose
                 )
+            
+            '''
+            i = 0
+            print('\nPrinting some peeps')
+            ph_dl = ph.get_dataloaders(verbose=verbose)
+            for data in ph_dl['test']:
+                print('phs\n', data[peep_layer]['peepholes'])
+                print('max\n', data[peep_layer]['score_max'])
+                print('ent\n', data[peep_layer]['score_entropy'])
+                i += 1
+                if i == 3: break
+            '''
+            ph.evaluate_dists(
+                    score_type = 'max',
+                    coreVectors = cv_dl,
+                    bins = 20
+                    )
