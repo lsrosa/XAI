@@ -162,13 +162,16 @@ class CoreVectors():
         else:
             if verbose: print('No normalization info found')
 
+
         return
     
     def __enter__(self):
+        print("Establishing connection... - _is_contexted set True")
         self._is_contexted = True
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        print("Closing connection...")
         verbose = True 
 
         if self._corevds == None:
@@ -192,3 +195,6 @@ class CoreVectors():
         if not self._is_contexted:
             raise RuntimeError('Function should be called within context manager')
         return
+    
+    def ciao(self):
+        print("siamo nel context manager!! :)")

@@ -17,7 +17,7 @@ def get_coreVec_dataset(self, **kwargs):
     self.check_uncontexted()
 
     verbose = kwargs['verbose'] if 'verbose' in kwargs else False
-    loaders = kwargs['loaders']
+    loaders = kwargs['loaders']     # contains 3 dict (train, val, test)
     key_list = kwargs['key_list'] if 'key_list' in kwargs else ['image', 'label']
     parser = kwargs['parser'] if 'parser' in kwargs else fds
 

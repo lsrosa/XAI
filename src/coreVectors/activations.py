@@ -24,6 +24,7 @@ def get_activations(self, **kwargs):
         
         file_path = self.path/(self.name.name+'.activations.'+ds_key)
         n_samples = self._n_samples[ds_key]       
+        print("N SAMPLES", n_samples)
 
         if file_path.exists():
             if verbose: print(f'File {file_path} exists. Loading from disk.')
@@ -63,6 +64,7 @@ def get_activations(self, **kwargs):
                 if verbose: print('allocating in act layer: ', lk)
                 # Seems like when loading from memory the batch size gets overwritten with all dims, so we over-overwrite it.
                 act_shape = hooks[lk].in_shape
+                print(act_shape)
                 act_td['in_activations'][lk] = MMT.empty(shape=torch.Size((n_samples,)+act_shape))
                 _lts = lk
 
