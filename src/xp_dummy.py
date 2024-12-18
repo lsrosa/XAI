@@ -112,6 +112,8 @@ if __name__ == "__main__":
     #wrap.set_target_layers(target_layers=isolated_target_layers)
     wrap.set_target_layers(target_layers=target_layer_mlp0)
 
+    print('Target Layers = ', wrap.get_target_layers())
+
     direction = {'save_input':True, 'save_output':False}
     wrap.add_hooks(**direction, verbose=verbose)
 
@@ -160,10 +162,11 @@ if __name__ == "__main__":
             parser = parser_fn,
             verbose = verbose
             )
+        
         cv_dl = cv.get_dataloaders(verbose=verbose)
 
         #cv_act_loaders = 
-        act_load = cv.get_activations_loaders(verbose=verbose)
+        #act_load = cv.get_activations_loaders(verbose=verbose)
         
         
         #print('ACT LOAD = ', type(act_load))
