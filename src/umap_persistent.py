@@ -30,20 +30,23 @@ if __name__ == "__main__":
     nns = np.linspace(2, ns-1, 4, dtype=np.int32) 
     fitt = torch.zeros(len(ncs), len(nns))
     predt = torch.zeros(len(ncs), len(nns))
-     
-    for i, nc in enumerate(ncs):
-        for j, nn in enumerate(nns):
-            print('sizes: ', nc, nn)
-            d = torch.rand(ns, ds)
-            reducer = umap.UMAP(n_components=nc, n_neighbors=nn)
-            t0 = time()
-            reducer.fit(d)
-            fitt[i][j] = time()-t0
+    
+    d = torch.hstack((
+        torch.sin(torch.linspace(0,1,100)).reshape(-1,1),
+        torch.cos(torch.linspace(0,1,100)).reshape(-1,1),
+        ))
+    print(d)
+    quit()
+    d = torch.rand(ns, ds)
+    reducer = umap.UMAP(n_components=nc, n_neighbors=nn)
+    t0 = time()
+    reducer.fit(d)
+    fitt[i][j] = time()-t0
 
-            d = torch.rand(ns, ds)
-            t0 = time()
-            rd = reducer.transform(d)
-            predt[i][j] = time()-t0
+    d = torch.rand(ns, ds)
+    t0 = time()
+    rd = reducer.transform(d)
+    predt[i][j] = time()-t0
             
     print(fitt)
     print(predt)
