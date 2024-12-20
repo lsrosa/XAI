@@ -39,14 +39,6 @@ def get_activations(self, **kwargs):
         act_td = self._actds[ds_key]
         cvs_td = self._corevds[ds_key]
 
-        # to check if pred and results data exist 
-        has_pred = 'pred' in cvs_td 
-        
-        # allocate memory for pred and result
-        if not has_pred:
-            cvs_td['pred'] = MMT.empty(shape=torch.Size((n_samples,)), dtype=torch.int16)
-            cvs_td['result'] = MMT.empty(shape=torch.Size((n_samples,)), dtype=torch.bool)
-
         # check if in and out activations exist
         if model._si and (not ('in_activations' in act_td)):
             if verbose: print('adding in act tensorDict')
